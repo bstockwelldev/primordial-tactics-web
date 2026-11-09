@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { SURVIVOR_NPCS } from '../game/constants';
+import { apiUrl } from '../lib/api';
 import { MessageSquare, X, Send, Sparkles, Bot, Shield, Dna, Compass } from 'lucide-react';
 
 interface ChatMessage {
@@ -52,7 +53,7 @@ export const NpcDialogueModal: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/npc-dialogue', {
+      const res = await fetch(apiUrl('/api/npc-dialogue'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

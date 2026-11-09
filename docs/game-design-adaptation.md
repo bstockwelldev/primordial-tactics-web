@@ -103,12 +103,13 @@ This doc is the gap list between that design and the scaffold as built (through 
 - GDD §2: "Unscaled difficulty with permanent alterations based…" — the sentence cuts off in v1.1 and was kept as-is in v1.2.
 - Left: Brandon to finish the thought. (Is this permadeath? Persistent world changes? It reads like a core feature, not a footnote.)
 
-### 14. Deployment — Vercel client, arena server host TBD
+### 14. Deployment — split decided (option A); arena host TBD
 
 - Client: static Vite build, deploys to Vercel (install from `bun.lock`, build `vite build`, output `dist`).
-- Arena server: `server.ts` is a persistent Socket.io process and cannot run on Vercel's serverless functions. The client connects same-origin today, so a split deployment needs the socket URL made configurable.
-- Options: **A (recommended) split** — Vercel (client) + small always-on host (Fly.io / Render / Railway) for the arena server, one env var; **B managed realtime** — replace Socket.io with Ably/Pusher, bigger rewrite; **C single host** — skip Vercel, contradicts the decision.
-- Left: pick A/B/C. Gemini endpoints stay on the arena server for now; they are stateless and can move to Vercel serverless functions later.
+- Arena server: `server.ts` is a persistent Socket.io process and cannot run on Vercel's serverless functions. Split wired 2026-11-09: the client reads the arena URL from `VITE_ARENA_URL` (`src/lib/api.ts` — unset = same-origin); the server allows the Vercel origin via `ARENA_CORS_ORIGIN` (Socket.io + REST) and honors `process.env.PORT`.
+- Decided: **A split** — Vercel (client) + small always-on host (Fly.io / Render / Railway) for the arena server. **B managed realtime** and **C single host** rejected.
+- Left: pick the arena host; set `VITE_ARENA_URL` in the Vercel dashboard and `ARENA_CORS_ORIGIN` + `GEMINI_API_KEY` on the host. Gemini endpoints stay on the arena server for now; they are stateless and can move to Vercel serverless functions later.
+- **MVP note (2026-11-09): realtime multiplayer is NOT required for MVP — async multiplayer instead (long turn timer, notify the next player at end of turn). This may remove the need for a persistent Socket.io host entirely; the async turn design is an open item for the next session (see `docs/handoff.md`).**
 - See `docs/architecture.md` — Deployment.
 
 ## Suggested order
@@ -117,6 +118,6 @@ This doc is the gap list between that design and the scaffold as built (through 
 2. Combat fidelity fixes (gap 10) — small, mechanical.
 3. Bot quality + double-liberate guard (gap 3) — the next playable slice.
 4. Taming details (gap 2) — torpor formula + inventory mutation fix.
-5. Deployment decision (gap 14) + persistence decision (gap 9) — both are hosting calls, decide together.
+5. Deployment split decided (gap 14); persistence decision (gap 9) still open — async multiplayer (MVP) makes persistence a first-class requirement, decide with the async turn design.
 6. Balance pass + level curve (gap 5), then Magitek spec (gap 7).
 7. Multiplayer design section + roadmap unification (gaps 4, 12).

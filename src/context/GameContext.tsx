@@ -18,6 +18,7 @@ import {
   MAGITEK_AUGMENTS,
 } from '../game/constants';
 import { canAfford, deductResources, applyEvolution } from '../game/rules';
+import { ARENA_URL, apiUrl } from '../lib/api';
 
 export type ActiveScreen = 'base' | 'taming' | 'evolution' | 'arena' | 'campaign' | 'magitek';
 
@@ -170,7 +171,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Socket connection initialization
   useEffect(() => {
-    const s = io({
+    const s = io(ARENA_URL || window.location.origin, {
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,
     });
@@ -444,7 +445,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Request AI Debrief
     try {
-      const res = await fetch('/api/match-feedback', {
+      const res = await fetch(apiUrl('/api/match-feedback'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

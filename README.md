@@ -46,7 +46,7 @@ See `src/game/rules.ts` — the rules engine is the combat authority.
 
 ## Deployment
 
-The client is a static Vite build, deployable to Vercel. The arena server (`server.ts`) is a persistent Socket.io process and **cannot** run on Vercel's serverless functions — it needs an always-on host. The host decision is open; the recommended split is Vercel (client) + a small always-on host (arena server), with the socket URL made configurable. See `docs/architecture.md` — Deployment.
+The client is a static Vite build, deployable to Vercel. The arena server (`server.ts`) is a persistent Socket.io process and **cannot** run on Vercel's serverless functions — it needs an always-on host. Split decided 2026-11-09: Vercel (client) + a small always-on host (arena server), wired via `VITE_ARENA_URL` (`src/lib/api.ts`). The host itself is TBD. See `docs/architecture.md` — Deployment.
 
 ## Browser interface (desktop + mobile)
 
