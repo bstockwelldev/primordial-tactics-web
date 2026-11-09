@@ -95,7 +95,7 @@ Deferred / gaps (verified by reading `server.ts` and `TacticalArenaView.tsx`):
 - **Rooms are in-memory.** A server restart wipes all rooms and matches; no reconnect or room recovery.
 - **Turn timer is tracked, not enforced.** `turnTimeLeft` is set to 45 on turn change, but no server-side countdown forces a turn over.
 - **CORS is wide open** (`origin: '*'`) on the Socket.io server.
-- **Solo bot (fixed 2026-11-09).** `src/game/bot.ts` `runBotTurn()` is a pure, tested function: each AI unit picks the best attack among its offensive abilities (kills first, then damage per AP, favouring wounded targets), moves into range when nothing is reachable, and respects terrain and shields. It still ignores ally/self abilities and cooldowns — neither has any effect in the solo arena yet.
+- **Solo bot (rebuilt 2026-11-09).** `src/game/bot.ts` is a per-unit state machine (`ASSESS → FINISH / KITE / ENGAGE / REPOSITION / ADVANCE → DONE`, transition table enforced at runtime, every action state must spend AP so a turn always terminates). Decisions use no randomness; combat dice come from a seeded stream (`src/game/rng.ts`) shared with the player's attacks, so a solo match is reproducible from its seed (shown in the opening log line) plus the player's inputs. Profiles: `moderate` (the PvE/campaign opponent — evaluates attacks, focuses kills, plans multi-move routes by true AP cost, stages outside enemy reach before first blood, kites when wounded), plus `easy` and `static` as test baselines. `src/game/sim.ts` plays whole matches headlessly; `bot.sim.test.ts` checks determinism, state-machine legality, board invariants across all 12 sectors, and skill on mirrored squads (moderate beats easy and a stationary squad ≥ 80%, an idle one 100%). Squad/grid construction moved to `src/game/arenaSetup.ts`. Still ignores ally/self abilities and cooldowns — neither has any effect in the solo arena yet.
 - **Campaign win double-award (fixed 2026-11-09).** The direct `liberateSector()` call in `handleExecuteAbility` is gone — `recordMatchResult()` is the single payout path — and `liberateSector()` is idempotent (an already-liberated sector pays nothing).
 
 ## Directory map
@@ -112,7 +112,7 @@ Deferred / gaps (verified by reading `server.ts` and `TacticalArenaView.tsx`):
 ## Known limitations (verified)
 
 - `package.json` still says `react-example` v0.0.0 (template residue).
-- Tests: `bun run test` (`tsx --test`) runs `rules.test.ts` and `bot.test.ts`. Plain `node --test` cannot resolve the extensionless imports.
+- Tests: `bun run test` (`tsx --test`, ~20s) runs `rules.test.ts`, `bot.test.ts`, `bot.sim.test.ts`. Plain `node --test` cannot resolve the extensionless imports.
 - No README until this one; no CI.
 - `bun.lock` still lists firebase (stale — regen on next `bun install`).
 - Demo seeding is live: starter dinos/resources are hardcoded and `quickAddDemoResources()` grants resources — gate or remove before real play.
