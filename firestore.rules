@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny all unlisted paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Survivor User Profile
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 64;
+      allow update: if isOwner(userId)
+        && request.resource.data.uid == userId;
+      allow delete: if isOwner(userId);
+
+      // Tamed Dino Roster
+      match /dinos/{dinoId} {
+        allow read: if isSignedIn();
+        allow create, update: if isOwner(userId)
+          && request.resource.data.ownerId == userId
+          && isValidId(dinoId);
+        allow delete: if isOwner(userId);
+      }
+
+      // Base Camp
+      match /base/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Arena Match Records
+    match /matches/{matchId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && (request.resource.data.player1Id == request.auth.uid || request.resource.data.player2Id == request.auth.uid)
+        && isValidId(matchId);
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

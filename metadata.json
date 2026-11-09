@@ -1,0 +1,6 @@
+{
+  "name": "Primal Tactics: Dinosaur Survival RPG",
+  "description": "Multiplayer turn-based tactical RPG featuring dinosaur taming, evolutionary skill trees, base building, resource crafting, and LLM-powered dynamic NPC survival guides.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

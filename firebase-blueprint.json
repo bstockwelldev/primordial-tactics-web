@@ -1,0 +1,94 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Survivor profile with progression stats, resources, and camp level.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string", "maxLength": 64 },
+        "level": { "type": "number" },
+        "xp": { "type": "number" },
+        "amber": { "type": "number" },
+        "matchesPlayed": { "type": "number" },
+        "matchesWon": { "type": "number" },
+        "tamedCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "displayName", "level"]
+    },
+    "DinoCreature": {
+      "title": "DinoCreature",
+      "description": "Tamed dinosaur unit belonging to a player.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "speciesId": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 64 },
+        "evolutionStage": { "type": "number" },
+        "level": { "type": "number" },
+        "xp": { "type": "number" },
+        "hp": { "type": "number" },
+        "maxHp": { "type": "number" },
+        "attack": { "type": "number" },
+        "defense": { "type": "number" },
+        "speed": { "type": "number" },
+        "abilities": { "type": "array" }
+      },
+      "required": ["id", "ownerId", "speciesId", "name", "level"]
+    },
+    "BaseCamp": {
+      "title": "BaseCamp",
+      "description": "Survivor base buildings and crafted structures.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "shelterLevel": { "type": "number" },
+        "penLevel": { "type": "number" },
+        "craftingBenchLevel": { "type": "number" },
+        "incubatorLevel": { "type": "number" },
+        "watchtowerLevel": { "type": "number" },
+        "resources": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["ownerId", "shelterLevel"]
+    },
+    "MatchRecord": {
+      "title": "MatchRecord",
+      "description": "Multiplayer tactical arena match history and debrief.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "player1Id": { "type": "string" },
+        "player2Id": { "type": "string" },
+        "player1Name": { "type": "string" },
+        "player2Name": { "type": "string" },
+        "winnerId": { "type": "string" },
+        "turns": { "type": "number" },
+        "debrief": { "type": "string", "maxLength": 4000 },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "player1Id", "player2Id", "winnerId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Survivor player profiles"
+    },
+    "/users/{userId}/dinos/{dinoId}": {
+      "schema": "DinoCreature",
+      "description": "Tamed dinosaur units owned by the user"
+    },
+    "/users/{userId}/base/camp": {
+      "schema": "BaseCamp",
+      "description": "Survivor base camp structures and storage"
+    },
+    "/matches/{matchId}": {
+      "schema": "MatchRecord",
+      "description": "Archived tactical battle match results and AI coaching analysis"
+    }
+  }
+}
