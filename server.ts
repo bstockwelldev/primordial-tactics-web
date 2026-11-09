@@ -22,6 +22,15 @@ import { DINOSAUR_SPECIES, SURVIVOR_NPCS } from './src/game/constants.ts';
 
 dotenv.config();
 
+// Split deployment (Vercel client + always-on arena host): the client is a
+// different origin. ARENA_CORS_ORIGIN is a comma-separated allow-list
+// (e.g. https://primordial-tactics.vercel.app). Unset = '*' (dev / single-host
+// default — tighten once the client domain is known).
+const corsOrigins = (process.env.ARENA_CORS_ORIGIN || '*')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -29,11 +38,29 @@ const app = express();
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: '*',
+    origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
   },
 });
 
 app.use(express.json());
+
+// REST endpoints need CORS too once the client is on a different origin (Vercel).
+// Same allow-list as the Socket.io server above.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const allowed = !!origin && (corsOrigins.includes('*') || corsOrigins.includes(origin));
+  if (allowed) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    if (req.method === 'OPTIONS') {
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.sendStatus(204);
+      return;
+    }
+  }
+  next();
+});
 
 // Initialize Gemini Client
 const geminiApiKey = process.env.GEMINI_API_KEY || '';
@@ -803,7 +830,7 @@ async function startServer() {
     });
   }
 
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] Primal Tactics server listening on http://0.0.0.0:${PORT}`);
   });

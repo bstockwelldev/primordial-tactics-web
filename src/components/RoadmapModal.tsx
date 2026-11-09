@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
+import { apiUrl } from '../lib/api';
 import { Map, X, CheckCircle2, Clock, Sparkles, Trophy, Shield, Rocket } from 'lucide-react';
 
 export const RoadmapModal: React.FC = () => {
@@ -8,7 +9,7 @@ export const RoadmapModal: React.FC = () => {
 
   useEffect(() => {
     if (showRoadmapModal && !roadmapData) {
-      fetch('/api/roadmap')
+      fetch(apiUrl('/api/roadmap'))
         .then((res) => res.json())
         .then((data) => setRoadmapData(data))
         .catch((err) => console.warn('Failed to load roadmap:', err));

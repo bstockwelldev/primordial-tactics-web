@@ -38,15 +38,17 @@ Verified before removal: nothing in the app imported the Firebase module — `Ga
 
 ## Deployment
 
-**Client → Vercel.** The client is a static Vite build: install from `bun.lock` (Vercel auto-detects Bun), build `vite build`, output `dist`. `GEMINI_API_KEY` is set in the Vercel project dashboard (server env); the AI endpoints fall back to canned replies without it.
+**Client → Vercel.** The client is a static Vite build: install from `bun.lock` (Vercel auto-detects Bun), build `vite build`, output `dist`. `VITE_ARENA_URL` is set in the Vercel project dashboard (the arena server's public URL; unset = same-origin). The arena host gets `GEMINI_API_KEY`; the AI endpoints fall back to canned replies without it.
 
-**Arena server → needs a persistent host (decision open).** `server.ts` is a long-lived Socket.io process holding in-memory rooms. Vercel Functions are serverless request/response — they cannot hold the persistent WebSocket connections the arena needs, so the server cannot deploy to Vercel as-is. The client also connects same-origin today (`io()` with no URL), so a split deployment needs the socket URL made configurable (e.g. `VITE_ARENA_URL`).
+**Arena server → always-on host (split decided 2026-11-09, option A).** `server.ts` is a long-lived Socket.io process holding in-memory rooms. Vercel Functions are serverless request/response — they cannot hold the persistent WebSocket connections the arena needs, so the server cannot deploy to Vercel as-is. The split is wired: the client reads the arena URL from `VITE_ARENA_URL` (`src/lib/api.ts` — unset = same-origin, so dev and single-host still work with no config), and the server allows the Vercel origin via `ARENA_CORS_ORIGIN` (comma-separated allow-list; unset = `*`) for both Socket.io and the REST endpoints (`/api/npc-dialogue`, `/api/match-feedback`, `/api/roadmap`). The server also honors `process.env.PORT` now (arena hosts assign a port). Env to set once the host exists: Vercel dashboard `VITE_ARENA_URL` = arena host URL; arena host `ARENA_CORS_ORIGIN` = Vercel domain, `GEMINI_API_KEY`, `PORT` (assigned by the host).
 
-Options:
+Options (decided — A):
 
-- **A (recommended): split.** Vercel hosts the static client; the arena server runs on a small always-on host (Fly.io / Render / Railway). Minimal code change — one env var for the socket URL. The Gemini REST endpoints stay on the arena server for now; they are stateless and can move to Vercel serverless functions later.
-- **B: managed realtime.** Replace Socket.io with a managed realtime service (Ably / Pusher) that works with Vercel serverless. Bigger rewrite of the realtime layer, new ongoing dependency.
-- **C: single always-on host.** Skip Vercel; run the whole `server.ts` on one host. Contradicts the Vercel decision.
+- **A (chosen): split.** Vercel hosts the static client; the arena server runs on a small always-on host (Fly.io / Render / Railway). The Gemini REST endpoints stay on the arena server for now; they are stateless and can move to Vercel serverless functions later.
+- **B (rejected): managed realtime.** Replace Socket.io with a managed realtime service (Ably / Pusher) that works with Vercel serverless. Bigger rewrite of the realtime layer, new ongoing dependency.
+- **C (rejected): single always-on host.** Skip Vercel; run the whole `server.ts` on one host. Contradicts the Vercel decision.
+
+**MVP note (2026-11-09): realtime multiplayer is NOT required for MVP — async multiplayer instead (long turn timer, notify the next player at end of turn). This may remove the need for a persistent Socket.io host entirely; the async turn design is an open item for the next session (see `docs/handoff.md`).**
 
 ## Browser interface (desktop + mobile)
 
