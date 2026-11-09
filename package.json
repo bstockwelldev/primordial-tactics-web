@@ -18,7 +18,9 @@
 
     "clean": "rm -rf dist server.js",
 
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+
+    "test": "tsx --test src/game/*.test.ts"
   },
 
   "dependencies": {

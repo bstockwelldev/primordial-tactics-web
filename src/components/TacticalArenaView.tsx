@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useGame } from '../context/GameContext';
 import {
@@ -14,6 +14,7 @@ import {
   calculateTorporDamage,
   checkWinCondition,
 } from '../game/rules';
+import { runBotTurn } from '../game/bot';
 import {
   DINOSAUR_SPECIES,
   UNIT_PORTRAITS,
@@ -54,7 +55,6 @@ export const TacticalArenaView: React.FC = () => {
     setShowLobbyModal,
     tamedDinos,
     activeSectorMission,
-    liberateSector,
     clearActiveSectorMission,
     setActiveScreen,
   } = useGame();
@@ -100,6 +100,10 @@ export const TacticalArenaView: React.FC = () => {
   const [soloIsPlayerTurn, setSoloIsPlayerTurn] = useState<boolean>(true);
   const [soloLogs, setSoloLogs] = useState<BattleActionLog[]>([]);
   const [soloWinner, setSoloWinner] = useState<string | null>(null);
+  const soloUnitsRef = useRef(soloUnits);
+  soloUnitsRef.current = soloUnits;
+  const soloTurnRef = useRef(soloTurn);
+  soloTurnRef.current = soloTurn;
 
   // Interaction State
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
@@ -619,10 +623,8 @@ export const TacticalArenaView: React.FC = () => {
       const check = checkWinCondition(updatedUnits);
       if (check.isOver) {
         const winner = check.winnerPlayerId || 'player_me';
+        // Rewards and sector liberation are paid once, by recordMatchResult (match-over effect).
         setSoloWinner(winner);
-        if (winner === 'player_me' && activeSectorMission) {
-          liberateSector(activeSectorMission.id);
-        }
       }
     }
   };
@@ -653,78 +655,21 @@ export const TacticalArenaView: React.FC = () => {
     }
   };
 
-  // Automated Rival AI Move in Solo Mode
+  // Automated Rival AI Move in Solo Mode. The bot plan is computed once from the
+  // latest units (ref, not a state updater) so it is never double-applied.
   const runAiTurn = () => {
-    setSoloUnits((currentUnits) => {
-      const livingEnemies = currentUnits.filter((u) => !u.isPlayer && u.hp > 0);
-      const livingPlayers = currentUnits.filter((u) => u.isPlayer && u.hp > 0);
+    const result = runBotTurn(soloUnitsRef.current, gridTiles, soloTurnRef.current);
+    const check = checkWinCondition(result.units);
 
-      if (livingEnemies.length === 0 || livingPlayers.length === 0) return currentUnits;
+    // Hand the turn back with the player's AP refreshed
+    setSoloUnits(result.units.map((u) => (u.isPlayer && u.hp > 0 ? { ...u, ap: u.maxAp } : u)));
+    setSoloLogs((prev) => [...prev, ...result.logs]);
 
-      const updated = [...currentUnits];
-
-      // Each living AI unit acts
-      livingEnemies.forEach((aiUnit) => {
-        const closestPlayer = livingPlayers.reduce((closest, curr) => {
-          const d1 = calculateDistance(aiUnit.x, aiUnit.y, closest.x, closest.y);
-          const d2 = calculateDistance(aiUnit.x, aiUnit.y, curr.x, curr.y);
-          return d2 < d1 ? curr : closest;
-        }, livingPlayers[0]);
-
-        if (!closestPlayer) return;
-
-        const distance = calculateDistance(aiUnit.x, aiUnit.y, closestPlayer.x, closestPlayer.y);
-
-        // If in attack range, use an ability
-        const usableAbility = aiUnit.abilities[0];
-        if (usableAbility && distance <= usableAbility.range && aiUnit.ap >= usableAbility.apCost) {
-          const res = calculateDamage(
-            aiUnit.attack,
-            closestPlayer.defense,
-            usableAbility.damageMultiplier || 1.0,
-            false,
-            0,
-            aiUnit.unitClass,
-            closestPlayer.unitClass
-          );
-          closestPlayer.hp = Math.max(0, closestPlayer.hp - res.damage);
-          aiUnit.ap -= usableAbility.apCost;
-
-          setSoloLogs((prev) => [
-            ...prev,
-            {
-              id: `log_${Date.now()}`,
-              turn: soloTurn,
-              actorName: aiUnit.name,
-              actionName: usableAbility.name,
-              targetName: closestPlayer.name,
-              damage: res.damage,
-              text: `[AI] ${aiUnit.name} struck ${closestPlayer.name} with ${usableAbility.name} for ${res.damage} damage!`,
-              timestamp: new Date().toLocaleTimeString(),
-            },
-          ]);
-        }
-      });
-
-      // Pass turn back to player
-      setTimeout(() => {
-        setSoloIsPlayerTurn(true);
-        setSoloUnits((units) =>
-          units.map((u) => {
-            if (u.isPlayer && u.hp > 0) return { ...u, ap: u.maxAp };
-            return u;
-          })
-        );
-      }, 500);
-
-      // Check win condition
-      const check = checkWinCondition(updated);
-      if (check.isOver) {
-        setSoloWinner(check.winnerPlayerId || 'enemy_bot');
-      }
-
-      return updated;
-    });
+    if (check.isOver) {
+      setSoloWinner(check.winnerPlayerId || 'enemy_bot');
+    } else {
+      setSoloIsPlayerTurn(true);
+    }
   };
 
   // Send real-time battle chat

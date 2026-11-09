@@ -25,7 +25,7 @@ cp .env.example .env   # set GEMINI_API_KEY and APP_URL
 bun run dev            # app + arena server on http://localhost:3000
 ```
 
-Scripts: `dev` / `start` (`tsx server.ts`), `build` (`vite build`), `preview`, `lint` (`tsc --noEmit`). There is no test script yet — `src/game/rules.test.ts` exists but no runner is wired up (`node --test` runs it directly).
+Scripts: `dev` / `start` (`tsx server.ts`), `build` (`vite build`), `preview`, `lint` (`tsc --noEmit`), `test` (`tsx --test src/game/*.test.ts`).
 
 > First local run from a clean checkout has not been verified yet — confirm install, lint, and build on first run.
 

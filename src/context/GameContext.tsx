@@ -344,7 +344,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const liberateSector = (sectorId: string) => {
     const targetSector = campaignSectors.find((s) => s.id === sectorId);
-    if (!targetSector) return;
+    // Idempotent: a sector pays its rewards once, however many times a win is reported.
+    if (!targetSector || targetSector.liberated) return;
 
     setCampaignSectors((prev) =>
       prev.map((sec) => (sec.id === sectorId ? { ...sec, liberated: true } : sec))

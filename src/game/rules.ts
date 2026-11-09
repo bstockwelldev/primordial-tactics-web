@@ -71,7 +71,8 @@ export function calculateDamage(
   hasShield = false,
   terrainDefenseBonus = 0,
   attackerClass?: UnitClass,
-  defenderClass?: UnitClass
+  defenderClass?: UnitClass,
+  rng: () => number = Math.random
 ): { damage: number; isCritical: boolean } {
   let effectiveDefense = Math.max(0, defenderDefense + terrainDefenseBonus);
 
@@ -94,7 +95,7 @@ export function calculateDamage(
   // Blade class passive: +15% critical strike chance (30% total) and 1.75x crit damage
   const isBlade = attackerClass === 'Blade' || attackerClass === 'Striker';
   const critThreshold = isBlade ? 0.30 : 0.15;
-  const isCritical = Math.random() < critThreshold;
+  const isCritical = rng() < critThreshold;
   const critMultiplier = isCritical ? (isBlade ? 1.75 : 1.5) : 1.0;
 
   // Hulk class passive: 20% passive damage mitigation
