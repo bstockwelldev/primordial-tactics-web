@@ -6,6 +6,9 @@ import { PushNotifier, webPushSender } from './push.js';
 // Process-wide dependencies, built once from the environment.
 // POSTGRES_URL is what Vercel's Supabase integration injects (pooled connection).
 
+/** The deployment is missing required configuration; reported to callers as 503. */
+export class NotConfiguredError extends Error {}
+
 let deps: Deps | null = null;
 
 export function getDeps(): Deps {
@@ -15,7 +18,7 @@ export function getDeps(): Deps {
   if (url) {
     store = new PostgresStore(url);
   } else if (process.env.VERCEL) {
-    throw new Error('POSTGRES_URL is not set: connect the Supabase database to this Vercel project.');
+    throw new NotConfiguredError('The game database is not connected yet (POSTGRES_URL is not set).');
   } else {
     console.warn('[api] POSTGRES_URL not set — using an in-memory store (games are lost on restart).');
     store = new MemoryStore();
