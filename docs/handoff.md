@@ -48,6 +48,22 @@ Consequence: the persistent Socket.io arena server may be unnecessary for MVP. T
 
 `.env.example` still carries AI Studio comments and a redacted `GEMINI_API_KEY` value — refresh it when the arena host is chosen; do not copy the redacted value.
 
+## Async multiplayer — built 2026-11-10 (branch `claude/amazing-cerf-7db9o5`, not merged, not deployed)
+
+Spec + as-built notes: `docs/async-multiplayer-spec.md`. Layout: `src/game/engine.ts` (pure match engine), `api/_lib/` (`app.ts` HTTP handler, `store.ts` interface + memory store, `postgresStore.ts`, `push.ts`, `runtime.ts`), `api/index.ts` (the Vercel function), `server.ts` (dev server mounting the same handler; Socket.io removed), `src/lib/asyncApi.ts` + `src/lib/push.ts` + `src/components/MyGamesModal.tsx` (client), `public/sw.js` + `public/manifest.webmanifest`.
+
+Verified: `bun run test` (62 tests; the 6 Postgres ones need `TEST_POSTGRES_URL` pointing at an empty scratch database and are skipped otherwise), `bun run lint`, `bun run build`, and a two-browser Playwright run against Postgres 16 (create → invite link → join → moves → end turn → timeout → cron forfeit → resign → solo resume).
+
+**To go live (Brandon):**
+1. Create the Vercel project (dashboard import, as below).
+2. Connect the Supabase database `primordial-tactics` to that Vercel project (Vercel → Storage) so `POSTGRES_URL` is injected.
+3. Add env vars `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`.
+4. First deploy is the first real test of the serverless function, the `/api/*` rewrite and the cron — check `/api/health`, then play a game.
+
+Not verified anywhere: real push delivery to a phone (needs HTTPS + VAPID keys), and the Vercel deployment itself.
+
+Local dev: `bun run dev` with no `POSTGRES_URL` uses an in-memory store (games vanish on restart); set `POSTGRES_URL` to use a real database.
+
 ## Outstanding — next session (in rough order)
 
 1. **Async multiplayer design (the first decision).** Turn state is currently in-memory (`rooms` Map in `server.ts`) — it dies with the process and can't be shared across players/devices. Design: persisted turn store (Vercel KV / Postgres / Blob — pick one), long turn timer (duration TBD), notification at end of turn (mechanism TBD — push / email / in-app?), multiple concurrent games per player, game list/lobby for in-progress games. Answer the PvE and Campaign (?) questions above. If async replaces the socket layer, the persistent arena host may be unnecessary — the REST endpoints are stateless and could move to Vercel serverless functions. Propose the design; don't build it until Brandon approves.

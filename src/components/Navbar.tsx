@@ -28,6 +28,7 @@ export const Navbar: React.FC = () => {
     setActiveNpcModal,
     quickAddDemoResources,
     currentRoom,
+    yourTurnCount,
     activeSectorMission,
   } = useGame();
 
@@ -65,7 +66,7 @@ export const Navbar: React.FC = () => {
                     isConnected ? 'bg-emerald-500 shadow-emerald-500/50 shadow' : 'bg-red-500'
                   }`}
                 />
-                {isConnected ? 'Real-Time Online' : 'Connecting...'}
+                {isConnected ? 'Online' : 'Offline — solo play only'}
               </span>
               <span>•</span>
               <span className="text-stone-300 font-medium">{playerName}</span>
@@ -133,7 +134,12 @@ export const Navbar: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-orange-950/50 transition-all"
           >
             <Users className="w-3.5 h-3.5" />
-            <span>{currentRoom ? 'Arena Match' : 'Multiplayer Lobby'}</span>
+            <span>My Games</span>
+            {yourTurnCount > 0 && (
+              <span data-testid="your-turn-badge" className="ml-0.5 min-w-5 h-5 px-1 rounded-full bg-white text-orange-700 text-[11px] font-black flex items-center justify-center">
+                {yourTurnCount}
+              </span>
+            )}
           </button>
 
           {/* Feature Roadmap */}

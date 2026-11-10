@@ -17,6 +17,9 @@ import {
 import { runBotTurn } from '../game/bot';
 import { buildArenaGrid, buildSoloUnits } from '../game/arenaSetup';
 import { createRng, newSeed } from '../game/rng';
+import type { GameAction } from '../game/engine';
+import { timeLeft } from '../lib/asyncApi';
+import { SOLO_SAVE_KEY, SoloSave } from '../game/soloSave';
 import {
   DINOSAUR_SPECIES,
   UNIT_PORTRAITS,
@@ -50,7 +53,9 @@ import {
 export const TacticalArenaView: React.FC = () => {
   const {
     playerName,
-    socket,
+    myPlayerId,
+    asyncGame,
+    sendGameAction,
     currentRoom,
     setCurrentRoom,
     recordMatchResult,
@@ -124,20 +129,61 @@ export const TacticalArenaView: React.FC = () => {
     ]);
   };
 
+  // Restores the saved solo match for this mode (same sector, or skirmish), if there is one.
+  const restoreSoloMatch = (): boolean => {
+    let save: SoloSave | null = null;
+    try {
+      save = JSON.parse(localStorage.getItem(SOLO_SAVE_KEY) || 'null');
+    } catch {}
+    if (!save || !Array.isArray(save.units) || save.sectorId !== (activeSectorMission?.id ?? null)) return false;
+    setIsSoloMode(true);
+    setSelectedUnitId('player_hero');
+    setSelectedAbilityId(null);
+    setSoloWinner(null);
+    setSoloTurn(save.turn);
+    const seed = newSeed(); // the dice stream restarts from a fresh seed on resume
+    soloRngRef.current = createRng(seed);
+    soloUnitsRef.current = save.units;
+    soloTurnRef.current = save.turn;
+    setSoloUnits(save.units);
+    setSoloLogs(save.logs);
+    setSoloIsPlayerTurn(save.isPlayerTurn);
+    if (!save.isPlayerTurn) setTimeout(() => runAiTurn(), 800); // closed mid enemy turn: let it finish
+    return true;
+  };
+
+  const hasRoom = !!currentRoom;
   useEffect(() => {
-    if (!currentRoom) {
-      initSoloMatch();
+    if (!hasRoom) {
+      if (!restoreSoloMatch()) initSoloMatch();
     } else {
       setIsSoloMode(false);
     }
-  }, [currentRoom, activeSectorMission]);
+  }, [hasRoom, activeSectorMission]);
+
+  // Keep the in-progress solo match on this device so it can be resumed from My Games.
+  useEffect(() => {
+    if (hasRoom || !isSoloMode || soloUnits.length === 0) return;
+    if (soloWinner) {
+      localStorage.removeItem(SOLO_SAVE_KEY);
+      return;
+    }
+    const save: SoloSave = {
+      sectorId: activeSectorMission?.id ?? null,
+      units: soloUnits,
+      logs: soloLogs.slice(-100),
+      turn: soloTurn,
+      isPlayerTurn: soloIsPlayerTurn,
+    };
+    localStorage.setItem(SOLO_SAVE_KEY, JSON.stringify(save));
+  }, [hasRoom, isSoloMode, soloUnits, soloLogs, soloTurn, soloIsPlayerTurn, soloWinner]);
 
   // Derived Active Match State
   const activeUnits = currentRoom ? currentRoom.units : soloUnits;
   const activeLogs = currentRoom ? currentRoom.actionLogs : soloLogs;
   const currentTurnNumber = currentRoom ? currentRoom.turnNumber : soloTurn;
   const isMyTurn = currentRoom
-    ? currentRoom.activeTurnPlayerId === socket?.id
+    ? currentRoom.activeTurnPlayerId === myPlayerId
     : soloIsPlayerTurn;
   const isMatchOver = currentRoom ? currentRoom.status === 'completed' : !!soloWinner;
   const winnerId = currentRoom ? currentRoom.winnerId : soloWinner;
@@ -158,7 +204,7 @@ export const TacticalArenaView: React.FC = () => {
     if (isMatchOver) {
       const didWin = isSoloMode
         ? soloWinner === 'player_me'
-        : winnerId === socket?.id;
+        : winnerId === myPlayerId;
 
       if (didWin) {
         confetti({
@@ -168,9 +214,22 @@ export const TacticalArenaView: React.FC = () => {
         });
       }
 
-      recordMatchResult(didWin, currentTurnNumber, activeLogs);
+      recordMatchResult(didWin, currentTurnNumber, activeLogs, currentRoom?.roomId);
     }
-  }, [isMatchOver]);
+  }, [isMatchOver, currentRoom?.roomId]);
+
+  // Send one action for the open async game; the server validates it and returns the new board.
+  const [isSending, setIsSending] = useState(false);
+  const act = async (action: GameAction) => {
+    if (isSending) return;
+    setIsSending(true);
+    const error = await sendGameAction(action);
+    setIsSending(false);
+    if (error) {
+      setFloatingNotification(error);
+      setTimeout(() => setFloatingNotification(null), 3000);
+    }
+  };
 
   // Execute Move action or unit selection
   const handleTileClick = (targetX: number, targetY: number) => {
@@ -206,13 +265,8 @@ export const TacticalArenaView: React.FC = () => {
     if (!selectedUnit || selectedUnit.hp <= 0) return;
 
     // Otherwise, attempt movement
-    if (currentRoom && socket) {
-      socket.emit('move_unit', {
-        roomId: currentRoom.roomId,
-        unitId: selectedUnit.id,
-        targetX,
-        targetY,
-      });
+    if (currentRoom) {
+      act({ type: 'move', unitId: selectedUnit.id, x: targetX, y: targetY });
     } else {
       // Solo Mode Movement
       const occupied = soloUnits
@@ -274,13 +328,8 @@ export const TacticalArenaView: React.FC = () => {
       return;
     }
 
-    if (currentRoom && socket) {
-      socket.emit('use_ability', {
-        roomId: currentRoom.roomId,
-        actorUnitId: actorId,
-        targetUnitId: targetId,
-        abilityId,
-      });
+    if (currentRoom) {
+      act({ type: 'ability', unitId: actorId, targetId, abilityId });
       setSelectedAbilityId(null);
     } else {
       // Solo Mode Ability Execution
@@ -360,8 +409,8 @@ export const TacticalArenaView: React.FC = () => {
   const handleEndTurn = () => {
     if (!isMyTurn || isMatchOver) return;
 
-    if (currentRoom && socket) {
-      socket.emit('end_turn', { roomId: currentRoom.roomId });
+    if (currentRoom) {
+      act({ type: 'end_turn' });
     } else {
       // End player turn in solo mode, simulate AI turn
       setSoloIsPlayerTurn(false);
@@ -404,12 +453,9 @@ export const TacticalArenaView: React.FC = () => {
     e.preventDefault();
     if (!chatInput.trim()) return;
 
-    if (currentRoom && socket) {
-      socket.emit('send_chat', {
-        roomId: currentRoom.roomId,
-        senderName: playerName,
-        message: chatInput.trim(),
-      });
+    if (currentRoom) {
+      setFloatingNotification('Chat is not available in async matches yet.');
+      setTimeout(() => setFloatingNotification(null), 2500);
     } else {
       setSoloLogs((prev) => [
         ...prev,
@@ -441,15 +487,21 @@ export const TacticalArenaView: React.FC = () => {
                 {currentRoom ? currentRoom.name : 'Tactical Proving Grounds'}
               </h2>
               <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-stone-800 text-amber-300 border border-stone-700">
-                {currentRoom ? 'Multiplayer PvP' : 'Solo AI Skirmish'}
+                {currentRoom ? 'Async PvP' : 'Solo AI Skirmish'}
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs text-stone-400 mt-0.5">
               <span>Turn: {currentTurnNumber}</span>
               <span>•</span>
               <span className={isMyTurn ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                {isMyTurn ? '⚡ YOUR TURN' : "⏳ OPPONENT'S TURN"}
+                {isMatchOver ? 'MATCH OVER' : isMyTurn ? '⚡ YOUR TURN' : "⏳ OPPONENT'S TURN"}
               </span>
+              {asyncGame?.turnDeadline && !isMatchOver && (
+                <>
+                  <span>•</span>
+                  <span data-testid="turn-deadline">{timeLeft(asyncGame.turnDeadline)} left</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -472,10 +524,20 @@ export const TacticalArenaView: React.FC = () => {
               }}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700"
             >
-              Leave Room
+              Back to Solo
             </button>
           )}
 
+          {currentRoom && !isMatchOver && (
+            <button
+              onClick={() => window.confirm('Resign this match? Your opponent wins.') && act({ type: 'resign' })}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-red-900/60 text-red-300 border border-red-900/60 cursor-pointer"
+            >
+              Resign
+            </button>
+          )}
+
+          {!currentRoom && (
           <button
             onClick={initSoloMatch}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 cursor-pointer"
@@ -483,6 +545,7 @@ export const TacticalArenaView: React.FC = () => {
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset Match</span>
           </button>
+          )}
 
           <button
             onClick={handleEndTurn}
@@ -772,21 +835,21 @@ export const TacticalArenaView: React.FC = () => {
                   <Flame className="w-12 h-12 text-amber-400 mx-auto" />
                 </div>
                 <h3 className="text-3xl font-black text-stone-100">
-                  {winnerId === (currentRoom ? socket?.id : 'player_me')
+                  {winnerId === (currentRoom ? myPlayerId : 'player_me')
                     ? activeSectorMission
                       ? 'SECTOR LIBERATED!'
                       : 'VICTORY IN THE SANDS!'
                     : 'DEFEAT IN THE ARENA'}
                 </h3>
                 <p className="text-sm text-stone-300 max-w-md">
-                  {winnerId === (currentRoom ? socket?.id : 'player_me')
+                  {winnerId === (currentRoom ? myPlayerId : 'player_me')
                     ? activeSectorMission
                       ? `The Evil Tribe garrison at ${activeSectorMission.sectorName} has been routed! You earned +${activeSectorMission.rewards.magitekCores} Magitek Cores and +${activeSectorMission.rewards.amber} Amber.`
                       : 'Your dinosaur squad conquered the battlefield! Prehistoric Amber and battle experience granted.'
                     : 'Your squad was incapacitated. Retreat to your Base Camp Enclave to heal and regroup.'}
                 </p>
                 <div className="flex flex-wrap items-center justify-center gap-3">
-                  {activeSectorMission && winnerId === (currentRoom ? socket?.id : 'player_me') && (
+                  {activeSectorMission && winnerId === (currentRoom ? myPlayerId : 'player_me') && (
                     <button
                       onClick={() => {
                         clearActiveSectorMission();
@@ -1169,7 +1232,7 @@ export const TacticalArenaView: React.FC = () => {
                   >
                     <div className="flex items-center justify-between text-[10px] text-stone-500">
                       <span className="font-bold text-amber-400">{log.actorName}</span>
-                      <span>{log.timestamp}</span>
+                      <span>{/^\d{4}-\d\d-\d\dT/.test(log.timestamp) ? new Date(log.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : log.timestamp}</span>
                     </div>
                     <p className="leading-relaxed text-stone-300 text-[11px]">{log.text}</p>
                   </div>

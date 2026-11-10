@@ -1,6 +1,19 @@
 # Async multiplayer — spec
 
-Status: **design approved 2026-11-09 (Brandon: "proceed with your recommendations"); spec awaiting review before implementation.** Nothing in this document is built yet.
+Status: **locked 2026-11-10 and built** on branch `claude/amazing-cerf-7db9o5`. Verified locally (unit tests, real Postgres 16, two-browser end-to-end); **not yet deployed** — the Vercel project does not exist yet, so the serverless function and cron are unproven in production.
+
+## As built — differences from the locked text below
+
+- **Database access is a direct Postgres connection, not Supabase's REST API.** The function reads `POSTGRES_URL` (pooled connection, what Vercel's Supabase integration injects) via the `postgres` library. `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are not used. Reason: the same SQL could be tested end to end against a local Postgres; the REST route could not be exercised from the build sandbox.
+- **Supabase project:** `primordial-tactics` (`cauddcsbsaskxjcaobxv`, us-east-1, org "Stockwise Productions"), migration `supabase/migrations/0001_async_multiplayer.sql` applied. RLS on, no policies, privileges revoked from `anon` / `authenticated`.
+- Player names live in the game's `state` JSON (`hostName`, `guestName`) rather than being joined from `players`.
+- `end_reason` also allows `resign`.
+- "My Games" is a full-height modal opened from the navbar (reusing the old lobby slot), not a seventh nav tab.
+- Rules tightened while porting: an ability can only be used by its owner's unit on their turn (the socket server never checked), enemy abilities cannot target your own units, and self/ally abilities apply their effect without dealing damage.
+- Resuming a saved solo match restarts its dice from a fresh seed.
+- One function (`api/index.ts`) serves the whole API; `vercel.json` rewrites `/api/*` to it.
+- PvP wins pay the standard match rewards once per game (tracked in localStorage); they never liberate a campaign sector.
+
 
 ## Decisions
 
@@ -114,7 +127,7 @@ Caps: 10 active games per player; action log trimmed to the last 200 entries.
 ## Deployment
 
 - `vercel.json`: functions under `api/`, SPA rewrite narrowed so it no longer swallows `/api/*`, one cron entry.
-- Env (Vercel): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`.
+- Env (Vercel): `POSTGRES_URL` (injected by connecting the Supabase database to the Vercel project), `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:` address), `CRON_SECRET`. Generate VAPID keys with `bunx web-push generate-vapid-keys`.
 - `server.ts` remains the local dev server and mounts the same handler functions, so dev and production run one code path. The Socket.io handlers are deleted from `server.ts` (git history keeps them for the deferred realtime work); `socket.io` / `socket.io-client` are dropped. `VITE_ARENA_URL` / `ARENA_CORS_ORIGIN` become unused and are removed.
 - The Gemini endpoints stay in `server.ts` (local dev only) until the AI follow-up. On Vercel the client's existing failure paths apply: no debrief modal, NPC fallback line.
 
