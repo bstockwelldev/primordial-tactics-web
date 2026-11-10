@@ -1,5 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { io, Socket } from 'socket.io-client';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   TamedDino,
   PrehistoricResources,
@@ -18,7 +17,10 @@ import {
   MAGITEK_AUGMENTS,
 } from '../game/constants';
 import { canAfford, deductResources, applyEvolution } from '../game/rules';
-import { ARENA_URL, apiUrl } from '../lib/api';
+import { apiUrl } from '../lib/api';
+import * as asyncApi from '../lib/asyncApi';
+import type { GameSummary } from '../lib/asyncApi';
+import type { AsyncGame, GameAction } from '../game/engine';
 
 export type ActiveScreen = 'base' | 'taming' | 'evolution' | 'arena' | 'campaign' | 'magitek';
 
@@ -45,12 +47,26 @@ interface GameContextType {
   equipAugment: (dinoInstanceId: string, augmentId: string) => boolean;
   unequipAugment: (dinoInstanceId: string, augmentId: string) => boolean;
 
-  // Socket & Multiplayer
-  socket: Socket | null;
+  // Async multiplayer
+  /** This browser's player id on the game server; null until registered / while offline. */
+  myPlayerId: string | null;
   isConnected: boolean;
+  /** The async game open in the arena, as the server last returned it. */
+  asyncGame: AsyncGame | null;
+  /** `asyncGame` in the arena's shape, with isPlayer meaning "mine". Null in solo play. */
   currentRoom: ArenaRoomState | null;
   setCurrentRoom: (room: ArenaRoomState | null) => void;
-  availableRooms: Array<{ roomId: string; name: string; hostName: string; status: string; playerCount: number }>;
+  myGames: GameSummary[];
+  openGames: GameSummary[];
+  yourTurnCount: number;
+  refreshGames: () => Promise<void>;
+  createAsyncGame: (visibility: 'open' | 'invite', turnHours: number) => Promise<string | null>;
+  joinAsyncGame: (gameId: string) => Promise<string | null>;
+  openAsyncGame: (gameId: string) => Promise<string | null>;
+  /** Sends one action for the open game. Resolves to an error message, or null on success. */
+  sendGameAction: (action: GameAction) => Promise<string | null>;
+  pendingInviteId: string | null;
+  clearPendingInvite: () => void;
 
   // Modals
   activeNpcModal: string | null;
@@ -70,7 +86,7 @@ interface GameContextType {
   upgradeBuilding: (buildingId: string) => boolean;
   tameCreature: (speciesId: DinosaurSpeciesId, customName: string) => boolean;
   evolveCreature: (dinoInstanceId: string, branchId: EvolutionBranchId) => boolean;
-  recordMatchResult: (won: boolean, turns: number, logs: any[]) => void;
+  recordMatchResult: (won: boolean, turns: number, logs: any[], pvpGameId?: string) => void;
   quickAddDemoResources: () => void;
 }
 
@@ -146,13 +162,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [showDebriefModal, setShowDebriefModal] = useState(false);
   const [lastMatchSummary, setLastMatchSummary] = useState<any | null>(null);
 
-  // Sockets state
-  const [socket, setSocket] = useState<Socket | null>(null);
+  // Async multiplayer state
+  const [myPlayerId, setMyPlayerId] = useState<string | null>(() => asyncApi.getIdentity()?.playerId ?? null);
   const [isConnected, setIsConnected] = useState(false);
-  const [currentRoom, setCurrentRoom] = useState<ArenaRoomState | null>(null);
-  const [availableRooms, setAvailableRooms] = useState<
-    Array<{ roomId: string; name: string; hostName: string; status: string; playerCount: number }>
-  >([]);
+  const [asyncGame, setAsyncGame] = useState<AsyncGame | null>(null);
+  const [myGames, setMyGames] = useState<GameSummary[]>([]);
+  const [openGames, setOpenGames] = useState<GameSummary[]>([]);
+  const [pendingInviteId, setPendingInviteId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('game')
+  );
+  const asyncGameRef = useRef(asyncGame);
+  asyncGameRef.current = asyncGame;
 
   const [campaignSectors, setCampaignSectors] = useState<IslandSector[]>(() => {
     const saved = localStorage.getItem('pt_campaign_sectors');
@@ -169,49 +189,139 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('pt_campaign_sectors', JSON.stringify(campaignSectors));
   }, [playerName, resources, inventory, tamedDinos, campaignSectors]);
 
-  // Socket connection initialization
-  useEffect(() => {
-    const s = io(ARENA_URL || window.location.origin, {
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
-    });
+  // Register (or re-validate) this browser's player, then keep the games list fresh.
+  const playerNameRef = useRef(playerName);
+  playerNameRef.current = playerName;
 
-    s.on('connect', () => {
-      console.log('Connected to Primal Tactics WebSocket server:', s.id);
-      setIsConnected(true);
-    });
-
-    s.on('disconnect', () => {
-      console.log('Disconnected from WebSocket server');
-      setIsConnected(false);
-    });
-
-    s.on('rooms_list', (list) => {
-      setAvailableRooms(list);
-    });
-
-    s.on('rooms_updated', () => {
-      // Fetch updated rooms
-      s.emit('get_rooms');
-    });
-
-    s.on('room_created', (room: ArenaRoomState) => {
-      setCurrentRoom(room);
-      setActiveScreen('arena');
-      setShowLobbyModal(false);
-    });
-
-    s.on('room_state_updated', (room: ArenaRoomState) => {
-      setCurrentRoom(room);
-      setActiveScreen('arena');
-    });
-
-    setSocket(s);
-
-    return () => {
-      s.disconnect();
-    };
+  const refreshGames = useCallback(async () => {
+    if (!asyncApi.getIdentity()) {
+      const me = await asyncApi.ensurePlayer(playerNameRef.current);
+      if (!me) return setIsConnected(false);
+      setMyPlayerId(me.playerId);
+    }
+    const [mine, open] = await Promise.all([asyncApi.listMyGames(), asyncApi.listOpenGames()]);
+    if (mine.status === 401) {
+      // The server no longer knows this token (e.g. database reset): register again.
+      const me = await asyncApi.ensurePlayer(playerNameRef.current);
+      setMyPlayerId(me?.playerId ?? null);
+      return setIsConnected(!!me);
+    }
+    setIsConnected(mine.ok);
+    if (mine.ok) setMyGames(mine.data.games);
+    if (open.ok) setOpenGames(open.data.games);
   }, []);
+
+  useEffect(() => {
+    refreshGames();
+    const tick = () => document.visibilityState === 'visible' && refreshGames();
+    const timer = window.setInterval(tick, 30_000);
+    window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', tick);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [refreshGames]);
+
+  // Keep the server-side name in step with the local one.
+  useEffect(() => {
+    if (!myPlayerId) return;
+    const t = window.setTimeout(() => asyncApi.renamePlayer(playerName), 1500);
+    return () => window.clearTimeout(t);
+  }, [playerName, myPlayerId]);
+
+  useEffect(() => {
+    if (pendingInviteId) setShowLobbyModal(true);
+  }, [pendingInviteId]);
+
+  const clearPendingInvite = () => {
+    setPendingInviteId(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('game');
+    window.history.replaceState({}, '', url.toString());
+  };
+
+  const openAsyncGame = async (gameId: string): Promise<string | null> => {
+    const res = await asyncApi.getGame(gameId);
+    if (!res.ok || res.data.preview) return res.data.error || 'You are not a player in this game.';
+    setAsyncGame(res.data.game as AsyncGame);
+    setActiveScreen('arena');
+    setShowLobbyModal(false);
+    return null;
+  };
+
+  const createAsyncGame = async (visibility: 'open' | 'invite', turnHours: number): Promise<string | null> => {
+    const res = await asyncApi.createGame(visibility, turnHours);
+    if (!res.ok) return res.data.error || 'Could not create the game.';
+    await refreshGames();
+    return null;
+  };
+
+  const joinAsyncGame = async (gameId: string): Promise<string | null> => {
+    const res = await asyncApi.joinGame(gameId);
+    if (!res.ok) return res.data.error || 'Could not join the game.';
+    setAsyncGame(res.data.game);
+    setActiveScreen('arena');
+    setShowLobbyModal(false);
+    refreshGames();
+    return null;
+  };
+
+  const sendGameAction = async (action: GameAction): Promise<string | null> => {
+    const game = asyncGameRef.current;
+    if (!game) return 'No game is open.';
+    const res = await asyncApi.sendAction(game.id, game.version, action);
+    if (res.data.game) setAsyncGame(res.data.game); // on a conflict the server returns the fresh board
+    if (res.ok && (action.type === 'end_turn' || action.type === 'resign')) refreshGames();
+    return res.ok ? null : res.data.error || 'That action failed.';
+  };
+
+  // While an async game is open and it is not my move, poll for the opponent's turn.
+  const openGameId = asyncGame?.id;
+  const waitingOnOpponent = !!asyncGame && asyncGame.status !== 'completed' && asyncGame.activePlayerId !== myPlayerId;
+  useEffect(() => {
+    if (!openGameId || !waitingOnOpponent) return;
+    const poll = async () => {
+      if (document.visibilityState !== 'visible') return;
+      const res = await asyncApi.getGame(openGameId);
+      if (res.ok && !res.data.preview && asyncGameRef.current?.id === openGameId) setAsyncGame(res.data.game as AsyncGame);
+    };
+    const timer = window.setInterval(poll, 15_000);
+    window.addEventListener('focus', poll);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', poll);
+    };
+  }, [openGameId, waitingOnOpponent]);
+
+  // The arena renders a "room"; for an async game that is the server state seen from my side.
+  const currentRoom = useMemo<ArenaRoomState | null>(() => {
+    if (!asyncGame) return null;
+    return {
+      roomId: asyncGame.id,
+      name: `${asyncGame.hostName} vs ${asyncGame.guestName || '…'}`,
+      hostId: asyncGame.hostId,
+      hostName: asyncGame.hostName,
+      guestId: asyncGame.guestId ?? undefined,
+      guestName: asyncGame.guestName ?? undefined,
+      status: asyncGame.status,
+      activeTurnPlayerId: asyncGame.activePlayerId ?? '',
+      turnNumber: asyncGame.turnNumber,
+      turnTimeLeft: 0,
+      gridWidth: 8,
+      gridHeight: 6,
+      units: asyncGame.units.map((u) => ({ ...u, isPlayer: u.ownerId === myPlayerId })),
+      actionLogs: asyncGame.actionLogs,
+      winnerId: asyncGame.winnerId ?? undefined,
+    };
+  }, [asyncGame, myPlayerId]);
+
+  const setCurrentRoom = (room: ArenaRoomState | null) => {
+    if (!room) setAsyncGame(null);
+  };
+
+  const yourTurnCount = myGames.filter((g) => g.status === 'in_progress' && g.activePlayerId === myPlayerId).length;
 
   const addResources = (res: Partial<PrehistoricResources>) => {
     setResources((prev) => {
@@ -344,7 +454,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const liberateSector = (sectorId: string) => {
     const targetSector = campaignSectors.find((s) => s.id === sectorId);
-    if (!targetSector) return;
+    // Idempotent: a sector pays its rewards once, however many times a win is reported.
+    if (!targetSector || targetSector.liberated) return;
 
     setCampaignSectors((prev) =>
       prev.map((sec) => (sec.id === sectorId ? { ...sec, liberated: true } : sec))
@@ -430,7 +541,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  const recordMatchResult = async (won: boolean, turns: number, logs: any[]) => {
+  const recordMatchResult = async (won: boolean, turns: number, logs: any[], pvpGameId?: string) => {
+    if (pvpGameId) {
+      // A finished PvP game can be reopened from the list: pay its rewards only once.
+      const paid: string[] = JSON.parse(localStorage.getItem('pt_rewarded_games') || '[]');
+      if (paid.includes(pvpGameId)) return;
+      localStorage.setItem('pt_rewarded_games', JSON.stringify([...paid, pvpGameId].slice(-200)));
+    }
     setPlayerXp((xp) => xp + (won ? 300 : 100));
     addResources({
       amber: won ? 50 : 20,
@@ -439,7 +556,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       magitekCores: won ? 2 : 0,
     });
 
-    if (won && activeSectorMission) {
+    if (won && activeSectorMission && !pvpGameId) {
       liberateSector(activeSectorMission.id);
     }
 
@@ -485,11 +602,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearActiveSectorMission,
         equipAugment,
         unequipAugment,
-        socket,
+        myPlayerId,
         isConnected,
+        asyncGame,
         currentRoom,
         setCurrentRoom,
-        availableRooms,
+        myGames,
+        openGames,
+        yourTurnCount,
+        refreshGames,
+        createAsyncGame,
+        joinAsyncGame,
+        openAsyncGame,
+        sendGameAction,
+        pendingInviteId,
+        clearPendingInvite,
         activeNpcModal,
         setActiveNpcModal,
         showRoadmapModal,

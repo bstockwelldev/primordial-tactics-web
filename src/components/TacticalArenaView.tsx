@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useGame } from '../context/GameContext';
 import {
@@ -14,6 +14,12 @@ import {
   calculateTorporDamage,
   checkWinCondition,
 } from '../game/rules';
+import { runBotTurn } from '../game/bot';
+import { buildArenaGrid, buildSoloUnits } from '../game/arenaSetup';
+import { createRng, newSeed } from '../game/rng';
+import type { GameAction } from '../game/engine';
+import { timeLeft } from '../lib/asyncApi';
+import { SOLO_SAVE_KEY, SoloSave } from '../game/soloSave';
 import {
   DINOSAUR_SPECIES,
   UNIT_PORTRAITS,
@@ -47,14 +53,15 @@ import {
 export const TacticalArenaView: React.FC = () => {
   const {
     playerName,
-    socket,
+    myPlayerId,
+    asyncGame,
+    sendGameAction,
     currentRoom,
     setCurrentRoom,
     recordMatchResult,
     setShowLobbyModal,
     tamedDinos,
     activeSectorMission,
-    liberateSector,
     clearActiveSectorMission,
     setActiveScreen,
   } = useGame();
@@ -69,29 +76,7 @@ export const TacticalArenaView: React.FC = () => {
   };
 
   // Grid setup (8x6)
-  const [gridTiles] = useState<GridTile[]>(() => {
-    const tiles: GridTile[] = [];
-    const rocks = [
-      { x: 2, y: 1 },
-      { x: 5, y: 4 },
-      { x: 3, y: 3 },
-      { x: 4, y: 2 },
-    ];
-    for (let y = 0; y < 6; y++) {
-      for (let x = 0; x < 8; x++) {
-        const isRock = rocks.some((r) => r.x === x && r.y === y);
-        const isFoliage = (x === 1 && y === 4) || (x === 6 && y === 1);
-        tiles.push({
-          x,
-          y,
-          type: isRock ? 'rock' : isFoliage ? 'foliage' : 'grass',
-          walkable: !isRock,
-          defenseBonus: isFoliage ? 15 : 0,
-        });
-      }
-    }
-    return tiles;
-  });
+  const [gridTiles] = useState<GridTile[]>(buildArenaGrid);
 
   // Local / Solo match state fallback (if not connected to a live socket room)
   const [isSoloMode, setIsSoloMode] = useState(!currentRoom);
@@ -100,6 +85,13 @@ export const TacticalArenaView: React.FC = () => {
   const [soloIsPlayerTurn, setSoloIsPlayerTurn] = useState<boolean>(true);
   const [soloLogs, setSoloLogs] = useState<BattleActionLog[]>([]);
   const [soloWinner, setSoloWinner] = useState<string | null>(null);
+  const soloUnitsRef = useRef(soloUnits);
+  soloUnitsRef.current = soloUnits;
+  const soloTurnRef = useRef(soloTurn);
+  // Every die in a solo match (player and bot) comes from one seeded stream, so a match
+  // is reproducible from its seed plus the player's inputs.
+  const soloRngRef = useRef<() => number>(Math.random);
+  soloTurnRef.current = soloTurn;
 
   // Interaction State
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
@@ -119,267 +111,10 @@ export const TacticalArenaView: React.FC = () => {
     setSoloWinner(null);
     setSoloTurn(1);
     setSoloIsPlayerTurn(true);
+    const seed = newSeed();
+    soloRngRef.current = createRng(seed);
 
-    // Player Hero is Human class with long-range tech utility
-    const playerHeroUnit: UnitEntity = {
-      id: 'player_hero',
-      isPlayer: true,
-      ownerId: 'player_me',
-      name: `${playerName} (Commander)`,
-      unitClass: 'Human',
-      imageUrl: UNIT_PORTRAITS.hunter,
-      x: 0,
-      y: 2,
-      hp: 200,
-      maxHp: 200,
-      torpor: 0,
-      maxTorpor: 100,
-      ap: 3,
-      maxAp: 3,
-      attack: 42,
-      defense: 22,
-      speed: 3,
-      avatarIcon: 'User',
-      abilities: [
-        {
-          id: 'tranq_shot',
-          name: 'Tranq Rifle',
-          apCost: 2,
-          cooldown: 0,
-          range: 4,
-          targetType: 'enemy',
-          damageMultiplier: 0.85,
-          torporDamage: 50,
-          description: 'Long-range narcotic dart inflicting 50 torpor damage and piercing light armor.',
-          iconName: 'Crosshair',
-        },
-        {
-          id: 'spear_thrust',
-          name: 'Obsidian Spear',
-          apCost: 1,
-          cooldown: 0,
-          range: 1,
-          targetType: 'enemy',
-          damageMultiplier: 1.0,
-          description: 'Melee piercing strike dealing 100% physical damage.',
-          iconName: 'Zap',
-        },
-      ],
-      statusEffects: [],
-    };
-
-    // Dino 1 (Blade Class)
-    const dino1 = tamedDinos[0];
-    const dino1Species = dino1?.speciesId ? DINOSAUR_SPECIES[dino1.speciesId] : DINOSAUR_SPECIES.velociraptor;
-    const playerDino1: UnitEntity = {
-      id: 'player_raptor',
-      isPlayer: true,
-      ownerId: 'player_me',
-      name: dino1?.customName || 'Ghostclaw (Raptor)',
-      speciesId: dino1?.speciesId || 'velociraptor',
-      unitClass: dino1Species?.unitClass || 'Blade',
-      imageUrl: dino1?.imageUrl || dino1Species?.imageUrl || UNIT_PORTRAITS.velociraptor,
-      x: 1,
-      y: 1,
-      hp: dino1?.maxHp || 160,
-      maxHp: dino1?.maxHp || 160,
-      torpor: dino1?.currentTorpor || 0,
-      maxTorpor: dino1?.maxTorpor || 120,
-      ap: 3,
-      maxAp: 3,
-      attack: dino1?.attack || 48,
-      defense: dino1?.defense || 16,
-      speed: dino1?.speed || 4,
-      avatarIcon: 'Zap',
-      abilities: dino1Species ? dino1Species.innateAbilities : DINOSAUR_SPECIES.velociraptor.innateAbilities,
-      statusEffects: [],
-    };
-
-    // Dino 2 (Skewer Class)
-    const dino2 = tamedDinos[1];
-    const dino2Species = dino2?.speciesId ? DINOSAUR_SPECIES[dino2.speciesId] : DINOSAUR_SPECIES.triceratops;
-    const playerDino2: UnitEntity = {
-      id: 'player_trike',
-      isPlayer: true,
-      ownerId: 'player_me',
-      name: dino2?.customName || 'Shieldhorn (Trike)',
-      speciesId: dino2?.speciesId || 'triceratops',
-      unitClass: dino2Species?.unitClass || 'Skewer',
-      imageUrl: dino2?.imageUrl || dino2Species?.imageUrl || UNIT_PORTRAITS.triceratops,
-      x: 1,
-      y: 4,
-      hp: dino2?.maxHp || 290,
-      maxHp: dino2?.maxHp || 290,
-      torpor: dino2?.currentTorpor || 0,
-      maxTorpor: dino2?.maxTorpor || 260,
-      ap: 3,
-      maxAp: 3,
-      attack: dino2?.attack || 34,
-      defense: dino2?.defense || 38,
-      speed: dino2?.speed || 2,
-      avatarIcon: 'Shield',
-      abilities: dino2Species ? dino2Species.innateAbilities : DINOSAUR_SPECIES.triceratops.innateAbilities,
-      statusEffects: [],
-    };
-
-    const playerUnits = [playerHeroUnit, playerDino1, playerDino2];
-
-    // Enemy units: build from activeSectorMission if launching campaign operation, else default rivals
-    let enemyUnits: UnitEntity[] = [];
-    if (activeSectorMission && activeSectorMission.enemySquad.length > 0) {
-      const spawnSlots = [
-        { x: 7, y: 3 },
-        { x: 6, y: 1 },
-        { x: 6, y: 4 },
-      ];
-      enemyUnits = activeSectorMission.enemySquad.map((enemy, idx) => {
-        const slot = spawnSlots[idx] || { x: 7, y: idx + 1 };
-        const species = enemy.speciesId ? DINOSAUR_SPECIES[enemy.speciesId] : null;
-        const levelScale = 1 + (enemy.level - 1) * 0.15;
-        const hp = species ? Math.round(species.baseHp * levelScale) : 190;
-        const attack = species ? Math.round(species.baseAttack * levelScale) : 40;
-        const defense = species ? Math.round(species.baseDefense * levelScale) : 22;
-        const speed = species ? species.baseSpeed : 3;
-
-        return {
-          id: `enemy_sector_${idx}`,
-          isPlayer: false,
-          ownerId: 'ai_bot',
-          name: enemy.name,
-          speciesId: enemy.speciesId,
-          unitClass: enemy.unitClass,
-          imageUrl:
-            species?.imageUrl ||
-            (enemy.unitClass === 'Human' ? UNIT_PORTRAITS.warlord : UNIT_PORTRAITS.velociraptor),
-          x: slot.x,
-          y: slot.y,
-          hp,
-          maxHp: hp,
-          torpor: 0,
-          maxTorpor: species ? species.baseTorporMax : 110,
-          ap: 3,
-          maxAp: 3,
-          attack,
-          defense,
-          speed,
-          avatarIcon: enemy.unitClass === 'Human' ? 'User' : 'Zap',
-          abilities: species
-            ? species.innateAbilities
-            : [
-                {
-                  id: 'tribe_spear',
-                  name: 'Primal Glaive',
-                  apCost: 2,
-                  cooldown: 0,
-                  range: 1,
-                  targetType: 'enemy',
-                  damageMultiplier: 1.15,
-                  description: 'Vicious slashing spear attack.',
-                  iconName: 'Zap',
-                },
-                {
-                  id: 'tribe_dart',
-                  name: 'Venom Needle',
-                  apCost: 2,
-                  cooldown: 0,
-                  range: 3,
-                  targetType: 'enemy',
-                  damageMultiplier: 0.85,
-                  torporDamage: 35,
-                  description: 'Poison dart applying torpor.',
-                  iconName: 'Crosshair',
-                },
-              ],
-          statusEffects: [],
-        };
-      });
-    } else {
-      enemyUnits = [
-        {
-          id: 'enemy_hero',
-          isPlayer: false,
-          ownerId: 'ai_bot',
-          name: 'Warlord Vorn (Rival)',
-          unitClass: 'Blade',
-          imageUrl: UNIT_PORTRAITS.warlord,
-          x: 7,
-          y: 3,
-          hp: 200,
-          maxHp: 200,
-          torpor: 0,
-          maxTorpor: 100,
-          ap: 3,
-          maxAp: 3,
-          attack: 40,
-          defense: 20,
-          speed: 3,
-          avatarIcon: 'User',
-          abilities: [
-            {
-              id: 'tranq_shot',
-              name: 'Tranq Rifle',
-              apCost: 2,
-              cooldown: 0,
-              range: 4,
-              targetType: 'enemy',
-              damageMultiplier: 0.85,
-              torporDamage: 45,
-              description: 'Narcotic dart build up.',
-              iconName: 'Crosshair',
-            },
-          ],
-          statusEffects: [],
-        },
-        {
-          id: 'enemy_ankylosaur',
-          isPlayer: false,
-          ownerId: 'ai_bot',
-          name: 'Ironhide (Ankylosaurus)',
-          speciesId: 'ankylosaurus',
-          unitClass: 'Crush',
-          imageUrl: UNIT_PORTRAITS.ankylosaurus,
-          x: 6,
-          y: 2,
-          hp: 270,
-          maxHp: 270,
-          torpor: 0,
-          maxTorpor: 240,
-          ap: 3,
-          maxAp: 3,
-          attack: 44,
-          defense: 45,
-          speed: 2,
-          avatarIcon: 'Hammer',
-          abilities: DINOSAUR_SPECIES.ankylosaurus.innateAbilities,
-          statusEffects: [],
-        },
-        {
-          id: 'enemy_dilopho',
-          isPlayer: false,
-          ownerId: 'ai_bot',
-          name: 'Venomspit (Dilophosaurus)',
-          speciesId: 'dilophosaurus',
-          unitClass: 'Blade',
-          imageUrl: UNIT_PORTRAITS.dilophosaurus,
-          x: 6,
-          y: 4,
-          hp: 170,
-          maxHp: 170,
-          torpor: 0,
-          maxTorpor: 130,
-          ap: 3,
-          maxAp: 3,
-          attack: 40,
-          defense: 18,
-          speed: 3,
-          avatarIcon: 'Droplet',
-          abilities: DINOSAUR_SPECIES.dilophosaurus.innateAbilities,
-          statusEffects: [],
-        },
-      ];
-    }
-
-    setSoloUnits([...playerUnits, ...enemyUnits]);
+    setSoloUnits(buildSoloUnits(playerName, tamedDinos, activeSectorMission));
     setSoloLogs([
       {
         id: `log_init_${Date.now()}`,
@@ -387,27 +122,68 @@ export const TacticalArenaView: React.FC = () => {
         actorName: 'Arena Arbiter',
         actionName: 'Battle Started',
         text: activeSectorMission
-          ? `Island Campaign Strike: Deploying to liberate [${activeSectorMission.sectorName}]!`
-          : 'The gladiatorial arena gates open! Hover over units and tiles to scan tactical information.',
+          ? `Island Campaign Strike: Deploying to liberate [${activeSectorMission.sectorName}]! (Match seed ${seed})`
+          : `The gladiatorial arena gates open! Hover over units and tiles to scan tactical information. (Match seed ${seed})`,
         timestamp: new Date().toLocaleTimeString(),
       },
     ]);
   };
 
+  // Restores the saved solo match for this mode (same sector, or skirmish), if there is one.
+  const restoreSoloMatch = (): boolean => {
+    let save: SoloSave | null = null;
+    try {
+      save = JSON.parse(localStorage.getItem(SOLO_SAVE_KEY) || 'null');
+    } catch {}
+    if (!save || !Array.isArray(save.units) || save.sectorId !== (activeSectorMission?.id ?? null)) return false;
+    setIsSoloMode(true);
+    setSelectedUnitId('player_hero');
+    setSelectedAbilityId(null);
+    setSoloWinner(null);
+    setSoloTurn(save.turn);
+    const seed = newSeed(); // the dice stream restarts from a fresh seed on resume
+    soloRngRef.current = createRng(seed);
+    soloUnitsRef.current = save.units;
+    soloTurnRef.current = save.turn;
+    setSoloUnits(save.units);
+    setSoloLogs(save.logs);
+    setSoloIsPlayerTurn(save.isPlayerTurn);
+    if (!save.isPlayerTurn) setTimeout(() => runAiTurn(), 800); // closed mid enemy turn: let it finish
+    return true;
+  };
+
+  const hasRoom = !!currentRoom;
   useEffect(() => {
-    if (!currentRoom) {
-      initSoloMatch();
+    if (!hasRoom) {
+      if (!restoreSoloMatch()) initSoloMatch();
     } else {
       setIsSoloMode(false);
     }
-  }, [currentRoom, activeSectorMission]);
+  }, [hasRoom, activeSectorMission]);
+
+  // Keep the in-progress solo match on this device so it can be resumed from My Games.
+  useEffect(() => {
+    if (hasRoom || !isSoloMode || soloUnits.length === 0) return;
+    if (soloWinner) {
+      localStorage.removeItem(SOLO_SAVE_KEY);
+      return;
+    }
+    const save: SoloSave = {
+      sectorId: activeSectorMission?.id ?? null,
+      units: soloUnits,
+      logs: soloLogs.slice(-100),
+      turn: soloTurn,
+      isPlayerTurn: soloIsPlayerTurn,
+    };
+    localStorage.setItem(SOLO_SAVE_KEY, JSON.stringify(save));
+  }, [hasRoom, isSoloMode, soloUnits, soloLogs, soloTurn, soloIsPlayerTurn, soloWinner]);
 
   // Derived Active Match State
   const activeUnits = currentRoom ? currentRoom.units : soloUnits;
   const activeLogs = currentRoom ? currentRoom.actionLogs : soloLogs;
   const currentTurnNumber = currentRoom ? currentRoom.turnNumber : soloTurn;
   const isMyTurn = currentRoom
-    ? currentRoom.activeTurnPlayerId === socket?.id
+    ? currentRoom.activeTurnPlayerId === myPlayerId
     : soloIsPlayerTurn;
   const isMatchOver = currentRoom ? currentRoom.status === 'completed' : !!soloWinner;
   const winnerId = currentRoom ? currentRoom.winnerId : soloWinner;
@@ -428,7 +204,7 @@ export const TacticalArenaView: React.FC = () => {
     if (isMatchOver) {
       const didWin = isSoloMode
         ? soloWinner === 'player_me'
-        : winnerId === socket?.id;
+        : winnerId === myPlayerId;
 
       if (didWin) {
         confetti({
@@ -438,9 +214,22 @@ export const TacticalArenaView: React.FC = () => {
         });
       }
 
-      recordMatchResult(didWin, currentTurnNumber, activeLogs);
+      recordMatchResult(didWin, currentTurnNumber, activeLogs, currentRoom?.roomId);
     }
-  }, [isMatchOver]);
+  }, [isMatchOver, currentRoom?.roomId]);
+
+  // Send one action for the open async game; the server validates it and returns the new board.
+  const [isSending, setIsSending] = useState(false);
+  const act = async (action: GameAction) => {
+    if (isSending) return;
+    setIsSending(true);
+    const error = await sendGameAction(action);
+    setIsSending(false);
+    if (error) {
+      setFloatingNotification(error);
+      setTimeout(() => setFloatingNotification(null), 3000);
+    }
+  };
 
   // Execute Move action or unit selection
   const handleTileClick = (targetX: number, targetY: number) => {
@@ -476,13 +265,8 @@ export const TacticalArenaView: React.FC = () => {
     if (!selectedUnit || selectedUnit.hp <= 0) return;
 
     // Otherwise, attempt movement
-    if (currentRoom && socket) {
-      socket.emit('move_unit', {
-        roomId: currentRoom.roomId,
-        unitId: selectedUnit.id,
-        targetX,
-        targetY,
-      });
+    if (currentRoom) {
+      act({ type: 'move', unitId: selectedUnit.id, x: targetX, y: targetY });
     } else {
       // Solo Mode Movement
       const occupied = soloUnits
@@ -544,13 +328,8 @@ export const TacticalArenaView: React.FC = () => {
       return;
     }
 
-    if (currentRoom && socket) {
-      socket.emit('use_ability', {
-        roomId: currentRoom.roomId,
-        actorUnitId: actorId,
-        targetUnitId: targetId,
-        abilityId,
-      });
+    if (currentRoom) {
+      act({ type: 'ability', unitId: actorId, targetId, abilityId });
       setSelectedAbilityId(null);
     } else {
       // Solo Mode Ability Execution
@@ -565,7 +344,8 @@ export const TacticalArenaView: React.FC = () => {
         hasShield,
         terrainBonus,
         actor.unitClass,
-        target.unitClass
+        target.unitClass,
+        soloRngRef.current
       );
 
       let torporApplied = 0;
@@ -619,10 +399,8 @@ export const TacticalArenaView: React.FC = () => {
       const check = checkWinCondition(updatedUnits);
       if (check.isOver) {
         const winner = check.winnerPlayerId || 'player_me';
+        // Rewards and sector liberation are paid once, by recordMatchResult (match-over effect).
         setSoloWinner(winner);
-        if (winner === 'player_me' && activeSectorMission) {
-          liberateSector(activeSectorMission.id);
-        }
       }
     }
   };
@@ -631,8 +409,8 @@ export const TacticalArenaView: React.FC = () => {
   const handleEndTurn = () => {
     if (!isMyTurn || isMatchOver) return;
 
-    if (currentRoom && socket) {
-      socket.emit('end_turn', { roomId: currentRoom.roomId });
+    if (currentRoom) {
+      act({ type: 'end_turn' });
     } else {
       // End player turn in solo mode, simulate AI turn
       setSoloIsPlayerTurn(false);
@@ -653,78 +431,21 @@ export const TacticalArenaView: React.FC = () => {
     }
   };
 
-  // Automated Rival AI Move in Solo Mode
+  // Automated Rival AI Move in Solo Mode. The bot plan is computed once from the
+  // latest units (ref, not a state updater) so it is never double-applied.
   const runAiTurn = () => {
-    setSoloUnits((currentUnits) => {
-      const livingEnemies = currentUnits.filter((u) => !u.isPlayer && u.hp > 0);
-      const livingPlayers = currentUnits.filter((u) => u.isPlayer && u.hp > 0);
+    const result = runBotTurn(soloUnitsRef.current, gridTiles, soloTurnRef.current, soloRngRef.current);
+    const check = checkWinCondition(result.units);
 
-      if (livingEnemies.length === 0 || livingPlayers.length === 0) return currentUnits;
+    // Hand the turn back with the player's AP refreshed
+    setSoloUnits(result.units.map((u) => (u.isPlayer && u.hp > 0 ? { ...u, ap: u.maxAp } : u)));
+    setSoloLogs((prev) => [...prev, ...result.logs]);
 
-      const updated = [...currentUnits];
-
-      // Each living AI unit acts
-      livingEnemies.forEach((aiUnit) => {
-        const closestPlayer = livingPlayers.reduce((closest, curr) => {
-          const d1 = calculateDistance(aiUnit.x, aiUnit.y, closest.x, closest.y);
-          const d2 = calculateDistance(aiUnit.x, aiUnit.y, curr.x, curr.y);
-          return d2 < d1 ? curr : closest;
-        }, livingPlayers[0]);
-
-        if (!closestPlayer) return;
-
-        const distance = calculateDistance(aiUnit.x, aiUnit.y, closestPlayer.x, closestPlayer.y);
-
-        // If in attack range, use an ability
-        const usableAbility = aiUnit.abilities[0];
-        if (usableAbility && distance <= usableAbility.range && aiUnit.ap >= usableAbility.apCost) {
-          const res = calculateDamage(
-            aiUnit.attack,
-            closestPlayer.defense,
-            usableAbility.damageMultiplier || 1.0,
-            false,
-            0,
-            aiUnit.unitClass,
-            closestPlayer.unitClass
-          );
-          closestPlayer.hp = Math.max(0, closestPlayer.hp - res.damage);
-          aiUnit.ap -= usableAbility.apCost;
-
-          setSoloLogs((prev) => [
-            ...prev,
-            {
-              id: `log_${Date.now()}`,
-              turn: soloTurn,
-              actorName: aiUnit.name,
-              actionName: usableAbility.name,
-              targetName: closestPlayer.name,
-              damage: res.damage,
-              text: `[AI] ${aiUnit.name} struck ${closestPlayer.name} with ${usableAbility.name} for ${res.damage} damage!`,
-              timestamp: new Date().toLocaleTimeString(),
-            },
-          ]);
-        }
-      });
-
-      // Pass turn back to player
-      setTimeout(() => {
-        setSoloIsPlayerTurn(true);
-        setSoloUnits((units) =>
-          units.map((u) => {
-            if (u.isPlayer && u.hp > 0) return { ...u, ap: u.maxAp };
-            return u;
-          })
-        );
-      }, 500);
-
-      // Check win condition
-      const check = checkWinCondition(updated);
-      if (check.isOver) {
-        setSoloWinner(check.winnerPlayerId || 'enemy_bot');
-      }
-
-      return updated;
-    });
+    if (check.isOver) {
+      setSoloWinner(check.winnerPlayerId || 'enemy_bot');
+    } else {
+      setSoloIsPlayerTurn(true);
+    }
   };
 
   // Send real-time battle chat
@@ -732,12 +453,9 @@ export const TacticalArenaView: React.FC = () => {
     e.preventDefault();
     if (!chatInput.trim()) return;
 
-    if (currentRoom && socket) {
-      socket.emit('send_chat', {
-        roomId: currentRoom.roomId,
-        senderName: playerName,
-        message: chatInput.trim(),
-      });
+    if (currentRoom) {
+      setFloatingNotification('Chat is not available in async matches yet.');
+      setTimeout(() => setFloatingNotification(null), 2500);
     } else {
       setSoloLogs((prev) => [
         ...prev,
@@ -769,15 +487,21 @@ export const TacticalArenaView: React.FC = () => {
                 {currentRoom ? currentRoom.name : 'Tactical Proving Grounds'}
               </h2>
               <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-stone-800 text-amber-300 border border-stone-700">
-                {currentRoom ? 'Multiplayer PvP' : 'Solo AI Skirmish'}
+                {currentRoom ? 'Async PvP' : 'Solo AI Skirmish'}
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs text-stone-400 mt-0.5">
               <span>Turn: {currentTurnNumber}</span>
               <span>•</span>
               <span className={isMyTurn ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                {isMyTurn ? '⚡ YOUR TURN' : "⏳ OPPONENT'S TURN"}
+                {isMatchOver ? 'MATCH OVER' : isMyTurn ? '⚡ YOUR TURN' : "⏳ OPPONENT'S TURN"}
               </span>
+              {asyncGame?.turnDeadline && !isMatchOver && (
+                <>
+                  <span>•</span>
+                  <span data-testid="turn-deadline">{timeLeft(asyncGame.turnDeadline)} left</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -800,10 +524,20 @@ export const TacticalArenaView: React.FC = () => {
               }}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700"
             >
-              Leave Room
+              Back to Solo
             </button>
           )}
 
+          {currentRoom && !isMatchOver && (
+            <button
+              onClick={() => window.confirm('Resign this match? Your opponent wins.') && act({ type: 'resign' })}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-red-900/60 text-red-300 border border-red-900/60 cursor-pointer"
+            >
+              Resign
+            </button>
+          )}
+
+          {!currentRoom && (
           <button
             onClick={initSoloMatch}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 cursor-pointer"
@@ -811,6 +545,7 @@ export const TacticalArenaView: React.FC = () => {
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset Match</span>
           </button>
+          )}
 
           <button
             onClick={handleEndTurn}
@@ -1100,21 +835,21 @@ export const TacticalArenaView: React.FC = () => {
                   <Flame className="w-12 h-12 text-amber-400 mx-auto" />
                 </div>
                 <h3 className="text-3xl font-black text-stone-100">
-                  {winnerId === (currentRoom ? socket?.id : 'player_me')
+                  {winnerId === (currentRoom ? myPlayerId : 'player_me')
                     ? activeSectorMission
                       ? 'SECTOR LIBERATED!'
                       : 'VICTORY IN THE SANDS!'
                     : 'DEFEAT IN THE ARENA'}
                 </h3>
                 <p className="text-sm text-stone-300 max-w-md">
-                  {winnerId === (currentRoom ? socket?.id : 'player_me')
+                  {winnerId === (currentRoom ? myPlayerId : 'player_me')
                     ? activeSectorMission
                       ? `The Evil Tribe garrison at ${activeSectorMission.sectorName} has been routed! You earned +${activeSectorMission.rewards.magitekCores} Magitek Cores and +${activeSectorMission.rewards.amber} Amber.`
                       : 'Your dinosaur squad conquered the battlefield! Prehistoric Amber and battle experience granted.'
                     : 'Your squad was incapacitated. Retreat to your Base Camp Enclave to heal and regroup.'}
                 </p>
                 <div className="flex flex-wrap items-center justify-center gap-3">
-                  {activeSectorMission && winnerId === (currentRoom ? socket?.id : 'player_me') && (
+                  {activeSectorMission && winnerId === (currentRoom ? myPlayerId : 'player_me') && (
                     <button
                       onClick={() => {
                         clearActiveSectorMission();
@@ -1497,7 +1232,7 @@ export const TacticalArenaView: React.FC = () => {
                   >
                     <div className="flex items-center justify-between text-[10px] text-stone-500">
                       <span className="font-bold text-amber-400">{log.actorName}</span>
-                      <span>{log.timestamp}</span>
+                      <span>{/^\d{4}-\d\d-\d\dT/.test(log.timestamp) ? new Date(log.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : log.timestamp}</span>
                     </div>
                     <p className="leading-relaxed text-stone-300 text-[11px]">{log.text}</p>
                   </div>

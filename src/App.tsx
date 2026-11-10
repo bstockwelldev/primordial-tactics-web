@@ -15,7 +15,7 @@ import { MagitekLabView } from './components/MagitekLabView';
 import { NpcDialogueModal } from './components/NpcDialogueModal';
 import { AIFeedbackModal } from './components/AIFeedbackModal';
 import { RoadmapModal } from './components/RoadmapModal';
-import { MultiplayerLobbyModal } from './components/MultiplayerLobbyModal';
+import { MyGamesModal } from './components/MyGamesModal';
 
 const GameShell: React.FC = () => {
   const { activeScreen } = useGame();
@@ -37,7 +37,7 @@ const GameShell: React.FC = () => {
       <NpcDialogueModal />
       <AIFeedbackModal />
       <RoadmapModal />
-      <MultiplayerLobbyModal />
+      <MyGamesModal />
     </div>
   );
 };

@@ -203,11 +203,13 @@ test('GDD class passives alter combat calculations correctly', () => {
 
   // Hulk class reduces incoming damage compared to unclassed defender
   // calculate damage against 40 defense: Skewer ignores 30% defense, dealing higher base
-  const skewerDmg = calculateDamage(60, 40, 1.0, false, 0, 'Skewer');
-  const normalDmg = calculateDamage(60, 40, 1.0, false, 0);
+  // rng pinned so no roll crits: the comparison is between passives, not dice.
+  const noCrit = () => 0.99;
+  const skewerDmg = calculateDamage(60, 40, 1.0, false, 0, 'Skewer', undefined, noCrit);
+  const normalDmg = calculateDamage(60, 40, 1.0, false, 0, undefined, undefined, noCrit);
   assert.ok(skewerDmg.damage >= normalDmg.damage);
 
-  const hulkDefenseDmg = calculateDamage(60, 20, 1.0, false, 0, undefined, 'Hulk');
-  const standardDefenseDmg = calculateDamage(60, 20, 1.0, false, 0);
+  const hulkDefenseDmg = calculateDamage(60, 20, 1.0, false, 0, undefined, 'Hulk', noCrit);
+  const standardDefenseDmg = calculateDamage(60, 20, 1.0, false, 0, undefined, undefined, noCrit);
   assert.ok(hulkDefenseDmg.damage <= standardDefenseDmg.damage);
 });

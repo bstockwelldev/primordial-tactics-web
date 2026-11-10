@@ -9,9 +9,9 @@ A browser-based tactical RPG with dinosaurs. Turn-based grid combat, dino taming
 ## Stack
 
 - Client: React 19, Vite 8, Tailwind CSS 4, TypeScript
-- Server: Express + Socket.io (`server.ts`), port 3000 — the arena server + Gemini REST endpoints
-- Deploy: Vercel (static client). The arena server needs a persistent host — see [Deployment](#deployment).
-- Data: localStorage only. Firebase was removed 2026-11-09 (see `docs/architecture.md`).
+- Server: `/api/*` — one handler (`api/_lib/app.ts`) run as a Vercel function in production and by `server.ts` (Express) in dev. Async PvP: players, games, turn timers, push.
+- Deploy: Vercel — static client plus one serverless function for `/api/*`. See [Deployment](#deployment).
+- Data: solo progress in localStorage; async PvP games in Supabase Postgres (`POSTGRES_URL`; in-memory when unset in dev). See `docs/async-multiplayer-spec.md`.
 - AI: Gemini API for NPC dialogue and match coaching (optional; canned fallback without a key)
 - Package manager: Bun (`bun.lock`)
 
@@ -25,7 +25,7 @@ cp .env.example .env   # set GEMINI_API_KEY and APP_URL
 bun run dev            # app + arena server on http://localhost:3000
 ```
 
-Scripts: `dev` / `start` (`tsx server.ts`), `build` (`vite build`), `preview`, `lint` (`tsc --noEmit`). There is no test script yet — `src/game/rules.test.ts` exists but no runner is wired up (`node --test` runs it directly).
+Scripts: `dev` / `start` (`tsx server.ts`), `build` (`vite build`), `preview`, `lint` (`tsc --noEmit`), `test` (`tsx --test src/game/*.test.ts`).
 
 > First local run from a clean checkout has not been verified yet — confirm install, lint, and build on first run.
 
@@ -46,7 +46,7 @@ See `src/game/rules.ts` — the rules engine is the combat authority.
 
 ## Deployment
 
-The client is a static Vite build, deployable to Vercel. The arena server (`server.ts`) is a persistent Socket.io process and **cannot** run on Vercel's serverless functions — it needs an always-on host. Split decided 2026-11-09: Vercel (client) + a small always-on host (arena server), wired via `VITE_ARENA_URL` (`src/lib/api.ts`). The host itself is TBD. See `docs/architecture.md` — Deployment.
+Everything deploys to Vercel: the static Vite client, one serverless function (`api/index.ts`) for `/api/*`, and a daily cron that sweeps expired turn timers. Game data lives in Supabase Postgres (`POSTGRES_URL`). There is no always-on host; the realtime Socket.io arena was removed 2026-11-10 in favour of async multiplayer. Not yet deployed — see `docs/handoff.md` for the go-live steps.
 
 ## Browser interface (desktop + mobile)
 

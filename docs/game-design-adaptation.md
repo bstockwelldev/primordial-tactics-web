@@ -35,7 +35,7 @@ This doc is the gap list between that design and the scaffold as built (through 
 
 - GDD: liberate island sectors from the evil tribe (PvE campaign).
 - Code: the path is built — `IslandSector` carries `enemySquad`, `threatLevel`, rewards, lore; `startSectorMission()` switches to the arena; the solo match loads the sector squad; a win liberates the sector. 12 sectors across 4 islands, first sector pre-liberated.
-- Left: (a) the bot is primitive — `runAiTurn()` attacks with each unit's first ability if the closest player unit is in range, and **never moves**, so out-of-range AI units stand still; no ability choice, no focus targeting; (b) a campaign win double-awards — `handleExecuteAbility` calls `liberateSector()` directly *and* the match-over effect calls `recordMatchResult()`, which calls it again (rewards + 250 XP twice). Needs a guard in one of the two paths.
+- Done 2026-11-09: (a) bot rewritten as `src/game/bot.ts` — moves into range, chooses among abilities, focuses kills and wounded targets; (b) double-award removed — `recordMatchResult()` is the only payout path and `liberateSector()` is idempotent. Left: ally/self abilities and cooldowns have no effect in the solo arena for either side.
 - Recommendation: bot quality (movement + ability choice) and the double-liberate guard are the next playable slice. PvP stays human-vs-human; no server-side vs-AI is needed for solo.
 
 ### 4. Multiplayer design section — GDD has none
@@ -85,8 +85,8 @@ This doc is the gap list between that design and the scaffold as built (through 
 - **Class passives don't fire in server PvP only.** `use_ability` in `server.ts` calls `calculateDamage` / `calculateTorporDamage` without attacker/defender class, so Skewer pierce, Human +10%, Blade/Striker crit bonus, Hulk/Tank mitigation, and Crush/Siege torpor bonus are dead in real PvP matches. The solo path passes the classes (verified), and `rules.test.ts` covers the passives — the rules exist, the server call site drops them. Fix: pass the classes through.
 - **Lobby list goes stale.** The client emits `get_rooms` on `rooms_updated`, but the server has no `get_rooms` handler — the list only refreshes on connect. Fix: add the handler.
 - **Turn timer is tracked, not enforced.** `turnTimeLeft` resets to 45 on turn change, but no server-side countdown forces a turn over. Decide: enforce or drop the timer.
-- **Campaign win double-awards (new).** Solo campaign win grants sector rewards + 250 XP twice — `liberateSector()` runs in both `handleExecuteAbility` and `recordMatchResult()`. Fix: guard one path.
-- **Solo bot never moves (new).** Out-of-range AI units stand still — `runAiTurn()` has no movement step. Fix with the bot-quality slice (gap 3).
+- **Campaign win double-awards — fixed 2026-11-09** (see gap 3).
+- **Solo bot never moves — fixed 2026-11-09** (see gap 3).
 
 ### 11. Name — Primordial vs Primal
 
@@ -116,7 +116,7 @@ This doc is the gap list between that design and the scaffold as built (through 
 
 1. Name + class taxonomy cleanup (cheap, unblocks the docs and UI copy).
 2. Combat fidelity fixes (gap 10) — small, mechanical.
-3. Bot quality + double-liberate guard (gap 3) — the next playable slice.
+3. Bot quality + double-liberate guard (gap 3) — done 2026-11-09.
 4. Taming details (gap 2) — torpor formula + inventory mutation fix.
 5. Deployment split decided (gap 14); persistence decision (gap 9) still open — async multiplayer (MVP) makes persistence a first-class requirement, decide with the async turn design.
 6. Balance pass + level curve (gap 5), then Magitek spec (gap 7).

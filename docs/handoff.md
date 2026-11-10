@@ -48,11 +48,27 @@ Consequence: the persistent Socket.io arena server may be unnecessary for MVP. T
 
 `.env.example` still carries AI Studio comments and a redacted `GEMINI_API_KEY` value — refresh it when the arena host is chosen; do not copy the redacted value.
 
+## Async multiplayer — built 2026-11-10 (branch `claude/amazing-cerf-7db9o5`, not merged, not deployed)
+
+Spec + as-built notes: `docs/async-multiplayer-spec.md`. Layout: `src/game/engine.ts` (pure match engine), `api/_lib/` (`app.ts` HTTP handler, `store.ts` interface + memory store, `postgresStore.ts`, `push.ts`, `runtime.ts`), `api/index.ts` (the Vercel function), `server.ts` (dev server mounting the same handler; Socket.io removed), `src/lib/asyncApi.ts` + `src/lib/push.ts` + `src/components/MyGamesModal.tsx` (client), `public/sw.js` + `public/manifest.webmanifest`.
+
+Verified: `bun run test` (62 tests; the 6 Postgres ones need `TEST_POSTGRES_URL` pointing at an empty scratch database and are skipped otherwise), `bun run lint`, `bun run build`, and a two-browser Playwright run against Postgres 16 (create → invite link → join → moves → end turn → timeout → cron forfeit → resign → solo resume).
+
+**To go live (Brandon):**
+1. Create the Vercel project (dashboard import, as below).
+2. Connect the Supabase database `primordial-tactics` to that Vercel project (Vercel → Storage) so `POSTGRES_URL` is injected.
+3. Add env vars `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`.
+4. First deploy is the first real test of the serverless function, the `/api/*` rewrite and the cron — check `/api/health`, then play a game.
+
+Not verified anywhere: real push delivery to a phone (needs HTTPS + VAPID keys), and the Vercel deployment itself.
+
+Local dev: `bun run dev` with no `POSTGRES_URL` uses an in-memory store (games vanish on restart); set `POSTGRES_URL` to use a real database.
+
 ## Outstanding — next session (in rough order)
 
 1. **Async multiplayer design (the first decision).** Turn state is currently in-memory (`rooms` Map in `server.ts`) — it dies with the process and can't be shared across players/devices. Design: persisted turn store (Vercel KV / Postgres / Blob — pick one), long turn timer (duration TBD), notification at end of turn (mechanism TBD — push / email / in-app?), multiple concurrent games per player, game list/lobby for in-progress games. Answer the PvE and Campaign (?) questions above. If async replaces the socket layer, the persistent arena host may be unnecessary — the REST endpoints are stateless and could move to Vercel serverless functions. Propose the design; don't build it until Brandon approves.
 2. **Vercel project creation (manual step above)** — PR #1 is merged, so the import deploys `main` with the split wiring + `vercel.json` to production, and future PRs get previews.
-3. **Bot quality + double-liberate guard** — the next playable slice: the solo bot never moves (out-of-range AI units stand still; it only uses each unit's first ability), and a solo campaign win pays sector rewards + 250 XP twice (`liberateSector` called directly and again via `recordMatchResult`).
+3. **Bot quality + double-liberate guard — done 2026-11-09** (`src/game/bot.ts` state machine, seeded RNG, headless simulator + skill checks; single payout path). Async design is specced in `docs/async-multiplayer-spec.md` (approved direction, spec awaiting review). **Balance findings from the simulator (not fixed — design calls):** the default skirmish rival squad is much weaker than the player squad (it loses to any active player); campaign difficulty is not monotonic for the starter squad — `sector_primoris_2` (threat 2, the first mission) is won ~9% of the time by a moderate-skill proxy, while `sector_caldera_1` (threat 3) and `sector_tempest_1` (threat 4) are won ~98–100%; threat 5+ is 0%. Second mover has a large edge in even matches.
 4. **Name: Primordial vs Primal.** Metadata/title/server strings say "Primal Tactics: Dinosaur Survival RPG"; repo + GDD say "Primordial". Brandon's call.
 5. **First local run:** `bun install` (regen `bun.lock`), `bun run lint`, `bun run build`.
 6. **Combat fidelity bugs (verified, in `docs/game-design-adaptation.md` gap 10):** class passives dead in server PvP only (`use_ability` drops class args); no `get_rooms` handler (lobby stale); turn timer tracked (45s) but never enforced.
@@ -66,7 +82,7 @@ Consequence: the persistent Socket.io arena server may be unnecessary for MVP. T
 ## How to run / verify
 
 - `bun install` → `bun run dev` (serves client + arena server same-origin on :3000) or `bun run build` + `bun run start`.
-- `bun run lint` = `tsc --noEmit`. No test script; `node --test src/game/rules.test.ts` runs the rules tests.
+- `bun run lint` = `tsc --noEmit`. `bun run test` runs the rules and bot tests (`tsx --test`; plain `node --test` cannot resolve the imports).
 - "Done" means verified by running, not trusted. For GitHub writes: this repo accepts `push_files` (the trees API works here, unlike tabletop-studio where it 403s). **Never re-push blind after a client-side timeout** — pushes can succeed server-side after timing out client-side (happened twice this session: docs push `d5fb9d8d` and split push `033a1e9f`); always verify with `list_commits` + byte sizes before retrying. **Never hand-build a push JSON with placeholder content** — an empty `content` string pushes an empty file (2026-11-09: an empty-content push wiped README + two docs; restored at `80817cb1`). Generate pushes from local files with a script and verify sizes.
 - `get_file_contents` returns stale cached data and its `ref` accepts branches/tags only (not commit SHAs). `search_code` returns total 0 for this young repo even for strings known to exist — do not use search results as evidence; rely on files actually read.
 - Approval gates: GitHub writes and production deploys need Brandon's explicit approval in chat. The Vercel project creation is the known exception already attempted (403, see above).

@@ -1,0 +1,10 @@
+{
+  "name": "Primal Tactics",
+  "short_name": "Primal Tactics",
+  "description": "Turn-based tactical RPG with dinosaurs.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0a09",
+  "theme_color": "#0c0a09",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
