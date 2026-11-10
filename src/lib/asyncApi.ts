@@ -40,16 +40,26 @@ async function request<T>(method: string, path: string, body?: unknown, auth = t
   }
 }
 
-/** Returns this browser's player, registering one on first use. Null when the server is unreachable. */
-export async function ensurePlayer(name: string): Promise<{ playerId: string } | null> {
+/** Plain-language reason a request failed, for showing to the player. */
+export function describeFailure(res: ApiResult<unknown>): string {
+  if (res.status === 0) return 'Cannot reach the game server. Check your connection.';
+  if (res.status === 503) return 'The game server is not fully set up yet (its database is not connected).';
+  if (res.status >= 500) return `The game server hit an error (code ${res.status}). Try again in a moment.`;
+  return res.data.error || `The game server refused the request (code ${res.status}).`;
+}
+
+export type EnsureResult = { playerId: string; error?: undefined } | { playerId?: undefined; error: string };
+
+/** Returns this browser's player, registering one on first use, or the reason it could not. */
+export async function ensurePlayer(name: string): Promise<EnsureResult> {
   const existing = getIdentity();
   if (existing) {
     const me = await request<{ playerId: string }>('GET', '/players/me');
     if (me.ok) return { playerId: existing.playerId };
-    if (me.status !== 401) return null; // offline or server error: keep the identity, try again later
+    if (me.status !== 401) return { error: describeFailure(me) }; // keep the identity, try again later
   }
-  const created = await request<{ playerId: string; token: string }>('POST', '/players', { name }, false);
-  if (!created.ok) return null;
+  const created = await request<{ playerId: string; token: string }>('POST', '/players', { name: name.trim() || 'Survivor' }, false);
+  if (!created.ok) return { error: describeFailure(created) };
   localStorage.setItem(ID_KEY, created.data.playerId);
   localStorage.setItem(TOKEN_KEY, created.data.token);
   return { playerId: created.data.playerId };

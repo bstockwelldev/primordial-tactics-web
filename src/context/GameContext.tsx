@@ -51,6 +51,8 @@ interface GameContextType {
   /** This browser's player id on the game server; null until registered / while offline. */
   myPlayerId: string | null;
   isConnected: boolean;
+  /** Why multiplayer is unavailable right now, in plain language; null when it is working. */
+  connectionError: string | null;
   /** The async game open in the arena, as the server last returned it. */
   asyncGame: AsyncGame | null;
   /** `asyncGame` in the arena's shape, with isPlayer meaning "mine". Null in solo play. */
@@ -165,6 +167,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Async multiplayer state
   const [myPlayerId, setMyPlayerId] = useState<string | null>(() => asyncApi.getIdentity()?.playerId ?? null);
   const [isConnected, setIsConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [asyncGame, setAsyncGame] = useState<AsyncGame | null>(null);
   const [myGames, setMyGames] = useState<GameSummary[]>([]);
   const [openGames, setOpenGames] = useState<GameSummary[]>([]);
@@ -194,20 +197,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   playerNameRef.current = playerName;
 
   const refreshGames = useCallback(async () => {
+    const offline = (reason: string) => {
+      setIsConnected(false);
+      setConnectionError(reason);
+    };
     if (!asyncApi.getIdentity()) {
       const me = await asyncApi.ensurePlayer(playerNameRef.current);
-      if (!me) return setIsConnected(false);
+      if (me.error !== undefined) return offline(me.error);
       setMyPlayerId(me.playerId);
     }
-    const [mine, open] = await Promise.all([asyncApi.listMyGames(), asyncApi.listOpenGames()]);
+    let [mine, open] = await Promise.all([asyncApi.listMyGames(), asyncApi.listOpenGames()]);
     if (mine.status === 401) {
-      // The server no longer knows this token (e.g. database reset): register again.
+      // The server no longer knows this token (e.g. database reset): register again, then retry.
       const me = await asyncApi.ensurePlayer(playerNameRef.current);
-      setMyPlayerId(me?.playerId ?? null);
-      return setIsConnected(!!me);
+      if (me.error !== undefined) return offline(me.error);
+      setMyPlayerId(me.playerId);
+      [mine, open] = await Promise.all([asyncApi.listMyGames(), asyncApi.listOpenGames()]);
     }
-    setIsConnected(mine.ok);
-    if (mine.ok) setMyGames(mine.data.games);
+    if (!mine.ok) return offline(asyncApi.describeFailure(mine));
+    setIsConnected(true);
+    setConnectionError(null);
+    setMyGames(mine.data.games);
     if (open.ok) setOpenGames(open.data.games);
   }, []);
 
@@ -604,6 +614,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unequipAugment,
         myPlayerId,
         isConnected,
+        connectionError,
         asyncGame,
         currentRoom,
         setCurrentRoom,
