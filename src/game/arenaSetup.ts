@@ -4,8 +4,30 @@ import { DINOSAUR_SPECIES, UNIT_PORTRAITS } from './constants';
 // Arena and squad construction for solo matches (skirmish + campaign). Pure, so the
 // browser and the headless simulator build exactly the same match.
 
-/** The fixed 8x6 arena: four rocks, two foliage tiles (+15 defense). */
-export function buildArenaGrid(): GridTile[] {
+/**
+ * Extra terrain for campaign arenas, by island (PvP and skirmish keep the plain arena).
+ * Water: +1 AP to enter. Mud: -1 tile of reach. Bones: +5 defense. Tempest is open sky.
+ */
+export const ISLAND_TERRAIN: Record<string, Array<{ x: number; y: number; type: 'water' | 'mud' | 'bones' }>> = {
+  primoris: [
+    { x: 3, y: 2, type: 'water' },
+    { x: 4, y: 3, type: 'water' },
+    { x: 3, y: 4, type: 'water' },
+  ],
+  caldera: [
+    { x: 2, y: 3, type: 'mud' },
+    { x: 5, y: 2, type: 'mud' },
+    { x: 4, y: 4, type: 'mud' },
+  ],
+  magitek_core: [
+    { x: 3, y: 2, type: 'bones' },
+    { x: 4, y: 3, type: 'bones' },
+    { x: 4, y: 1, type: 'bones' },
+  ],
+};
+
+/** The 8x6 arena: four rocks, two foliage tiles (+15 defense), plus the island's terrain if given. */
+export function buildArenaGrid(islandId?: string): GridTile[] {
   const tiles: GridTile[] = [];
   const rocks = [
     { x: 2, y: 1 },
@@ -24,6 +46,13 @@ export function buildArenaGrid(): GridTile[] {
         walkable: !isRock,
         defenseBonus: isFoliage ? 15 : 0,
       });
+    }
+  }
+  for (const o of (islandId && ISLAND_TERRAIN[islandId]) || []) {
+    const t = tiles.find((tile) => tile.x === o.x && tile.y === o.y);
+    if (t && t.type === 'grass') {
+      t.type = o.type;
+      t.defenseBonus = o.type === 'bones' ? 5 : 0;
     }
   }
   return tiles;

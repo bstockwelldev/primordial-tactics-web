@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { useGame } from '../context/GameContext';
 import {
@@ -10,6 +10,7 @@ import {
 import {
   calculateDistance,
   canUnitMoveTo,
+  moveApCost,
   calculateDamage,
   calculateTorporDamage,
   checkWinCondition,
@@ -76,7 +77,10 @@ export const TacticalArenaView: React.FC = () => {
   };
 
   // Grid setup (8x6)
-  const [gridTiles] = useState<GridTile[]>(buildArenaGrid);
+  const gridTiles = useMemo<GridTile[]>(
+    () => buildArenaGrid(!currentRoom ? activeSectorMission?.islandId : undefined),
+    [currentRoom, activeSectorMission?.islandId]
+  );
 
   // Local / Solo match state fallback (if not connected to a live socket room)
   const [isSoloMode, setIsSoloMode] = useState(!currentRoom);
@@ -745,7 +749,7 @@ export const TacticalArenaView: React.FC = () => {
                 let isReachable = false;
                 if (selectedUnit && !unitOnTile && tile.walkable && isMyTurn) {
                   const dist = calculateDistance(selectedUnit.x, selectedUnit.y, tile.x, tile.y);
-                  if (dist <= selectedUnit.speed && selectedUnit.ap >= Math.max(1, Math.ceil(dist / 2))) {
+                  if (selectedUnit.ap >= moveApCost(selectedUnit, tile, dist)) {
                     isReachable = true;
                   }
                 }
@@ -791,6 +795,10 @@ export const TacticalArenaView: React.FC = () => {
                         ? 'bg-emerald-950/50 border-emerald-500/70 hover:bg-emerald-900/60'
                         : isHovered
                         ? 'bg-stone-800 border-stone-600 shadow-md'
+                        : tile.type === 'water'
+                        ? 'bg-sky-950/40 border-sky-800/60'
+                        : tile.type === 'mud'
+                        ? 'bg-amber-950/40 border-amber-900/60'
                         : tile.defenseBonus
                         ? 'bg-emerald-950/30 border-emerald-900/50'
                         : 'bg-stone-900/90 border-stone-800/80 hover:border-stone-700'
@@ -802,9 +810,11 @@ export const TacticalArenaView: React.FC = () => {
                       {!tile.walkable && (
                         <span className="text-stone-500 font-bold uppercase text-[8px]">Crags</span>
                       )}
+                      {tile.type === 'water' && <span className="text-sky-400 font-bold text-[8px]">Water</span>}
+                      {tile.type === 'mud' && <span className="text-amber-500 font-bold text-[8px]">Mud</span>}
                       {tile.defenseBonus ? (
                         <span className="text-emerald-400 font-bold text-[8px] bg-emerald-950/80 px-1 py-0.5 rounded border border-emerald-800/60">
-                          +15%
+                          +{tile.defenseBonus}%
                         </span>
                       ) : null}
                     </div>

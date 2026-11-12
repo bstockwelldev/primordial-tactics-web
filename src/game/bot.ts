@@ -1,5 +1,5 @@
 import { Ability, BattleActionLog, GridTile, UnitEntity } from '../types/game';
-import { calculateDamage, calculateDistance, calculateTorporDamage, canUnitMoveTo } from './rules';
+import { calculateDamage, calculateDistance, calculateTorporDamage, canUnitMoveTo, moveApCost } from './rules';
 
 // ---------------------------------------------------------------------------
 // Bot = a per-unit finite state machine.
@@ -196,13 +196,13 @@ const key = (x: number, y: number) => `${x},${y}`;
 
 /**
  * Cheapest AP cost to walk between tiles under the movement rule (one move = any
- * walkable, unoccupied tile within `speed`, costing 1 AP per 2 tiles). Dijkstra from
+ * walkable, unoccupied tile within reach, costing 1 AP per 2 tiles plus terrain: see moveApCost). Dijkstra from
  * `sources`; moves are symmetric, so the same routine gives "cost from here" and
  * "cost to reach any goal". `prev` holds the first hop back toward a source.
  */
 function walkCosts(
   sources: Array<{ x: number; y: number }>,
-  speed: number,
+  mover: { speed: number; speciesId?: string },
   grid: GridTile[],
   blocked: Set<string>
 ): { cost: Map<string, number>; prev: Map<string, string> } {
@@ -228,8 +228,9 @@ function walkCosts(
     done.add(ck);
     for (const t of open) {
       const d = calculateDistance(cur.x, cur.y, t.x, t.y);
-      if (d === 0 || d > speed) continue;
-      const next = curCost + Math.max(1, Math.ceil(d / 2));
+      const step = moveApCost(mover, t, d);
+      if (!Number.isFinite(step)) continue;
+      const next = curCost + step;
       const tk = key(t.x, t.y);
       if (next < (cost.get(tk) ?? Infinity)) {
         cost.set(tk, next);
@@ -260,7 +261,7 @@ export function assess(
   const here = nearestFoeDist(bot.x, bot.y);
 
   // Every tile the unit can end on this turn (possibly via several moves), with the AP it costs.
-  const from = walkCosts([{ x: bot.x, y: bot.y }], bot.speed, grid, blocked);
+  const from = walkCosts([{ x: bot.x, y: bot.y }], bot, grid, blocked);
   const firstHop = (x: number, y: number): MovePlan => {
     let k = key(x, y);
     const start = key(bot.x, bot.y);
@@ -332,7 +333,7 @@ export function assess(
           !blocked.has(key(t.x, t.y)) &&
           foes.some((f) => calculateDistance(t.x, t.y, f.x, f.y) <= a.range)
       ),
-      bot.speed,
+      bot,
       grid,
       blocked
     ).cost,

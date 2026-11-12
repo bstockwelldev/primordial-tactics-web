@@ -17,8 +17,24 @@ export function calculateDistance(x1: number, y1: number, x2: number, y2: number
 /**
  * Checks whether a unit can move to a target coordinate within its remaining speed and AP
  */
+/**
+ * AP to move `distance` tiles onto `tile`, or Infinity if out of reach. Base 1 AP per 2 tiles
+ * (min 1). Water costs +1 AP; mud cuts reach by 1 tile. Flyers (pteranodon) ignore terrain.
+ * Shared by the client, the PvP engine and the bot so all three agree.
+ */
+export function moveApCost(
+  unit: { speed: number; speciesId?: string },
+  tile: { type?: string } | undefined,
+  distance: number
+): number {
+  const type = unit.speciesId === 'pteranodon' ? undefined : tile?.type;
+  const reach = unit.speed - (type === 'mud' ? 1 : 0);
+  if (distance <= 0 || distance > reach) return Infinity;
+  return Math.max(1, Math.ceil(distance / 2)) + (type === 'water' ? 1 : 0);
+}
+
 export function canUnitMoveTo(
-  unit: { x: number; y: number; speed: number; ap: number },
+  unit: { x: number; y: number; speed: number; ap: number; speciesId?: string },
   targetX: number,
   targetY: number,
   grid: GridTile[],
@@ -52,8 +68,10 @@ export function canUnitMoveTo(
     return { valid: false, apCost: 0, reason: `Target out of speed range (Max: ${unit.speed})` };
   }
 
-  // Standard movement costs 1 AP per 2 tiles (minimum 1 AP)
-  const apRequired = Math.max(1, Math.ceil(distance / 2));
+  const apRequired = moveApCost(unit, targetTile, distance);
+  if (!Number.isFinite(apRequired)) {
+    return { valid: false, apCost: 0, reason: 'Heavy mud slows movement: target out of range' };
+  }
   if (unit.ap < apRequired) {
     return { valid: false, apCost: apRequired, reason: `Insufficient AP (${unit.ap}/${apRequired})` };
   }
