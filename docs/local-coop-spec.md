@@ -126,7 +126,10 @@ Slices 1 and 4 can be developed in parallel; 2 and 3 depend on 1.
 ## 8. Later (out of scope now)
 
 - **Online co-op:** reuses the `controller` slot idea but needs the async engine to support a bot opponent and two human players. That is a larger server design (invite links, passwords and push already exist for PvP).
-- **Human vs human on one device:** the enemy side becomes slot 2; needs its own balance (fixed default squads, as today's PvP).
+- **Next milestone (set by Brandon 2026-11-12): local versus mode, a separate spec written after this one is built.** Two humans on one device, each side drafts its units from a common level-balanced pool so the field is even. For fun only: it never touches campaign progression, XP, loot or saved rosters. Notes so this milestone does not get blocked by slice 1:
+  - Keep `controller` independent of the side flag. Today `isPlayer` means "the human side"; versus needs two human sides, so the later work either adds a `side` concept or reuses `isPlayer` as "side A". Slice 1 must not hard-code "the other side is the bot" inside `canControl` or the phase logic; the enemy phase should be "the side that is not human-controlled" so a human side can replace it.
+  - The pool and level-balancing (a level-normalised stat set, point-buy or fixed templates, a draft or simultaneous pick) belong to that spec, not this one. The balance simulator from slice 4 is the tool for proving the pool is even (mirrored matches, first-mover edge: the handoff records a ~12% first-mover win-rate edge in mirrored bot matches, which a versus mode must address).
+  - Unlike co-op, versus needs a fairness answer for who moves first and a way to keep drafts private while both people share one screen.
 - **Buddy profile:** a second local save so the buddy keeps XP and dinos.
 
 ## 9. Decisions (locked 2026-11-12; the Default column is the decision)
