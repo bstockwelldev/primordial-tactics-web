@@ -10,6 +10,7 @@ import {
   joinGame,
   newGame,
 } from '../../src/game/engine.js';
+import { hashPassword, PASSWORD_MAX, PASSWORD_MIN, verifyPassword } from './password.js';
 import type { Player, Store } from './store.js';
 
 // The whole HTTP API as one framework-agnostic function: (request) -> (status, body).
@@ -22,6 +23,10 @@ const SWEEP_LIMIT = 200;
 /** An open challenge nobody has taken for this long is dead: hidden, unjoinable, then deleted by the sweep. */
 export const OPEN_GAME_TTL_DAYS = 7;
 const OPEN_GAME_TTL_MS = OPEN_GAME_TTL_DAYS * 24 * 3600_000;
+/** Password guesses allowed per game in each window. Per game, not per player: anyone can register new players. */
+export const MAX_JOIN_ATTEMPTS = 5;
+export const JOIN_WINDOW_MINUTES = 15;
+const JOIN_WINDOW_MS = JOIN_WINDOW_MINUTES * 60_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface ApiRequest {
@@ -107,6 +112,28 @@ const openCutoff = (now: string) => new Date(new Date(now).getTime() - OPEN_GAME
 const isExpiredChallenge = (g: AsyncGame, now: string) =>
   g.status === 'waiting' && g.visibility === 'open' && g.createdAt < openCutoff(now);
 
+/**
+ * Gate for joining a password-protected game. Each guess is counted before it is checked
+ * (see Store.reserveJoinAttempt), so a burst of parallel guesses still gets at most MAX_JOIN_ATTEMPTS.
+ * Returns the refusal to send, or null when the password was right.
+ */
+async function checkJoinPassword(gameId: string, password: unknown, deps: Deps): Promise<ApiResponse | null> {
+  if (typeof password !== 'string' || password === '') {
+    return fail(403, 'This game needs a password.', { passwordRequired: true });
+  }
+  const now = deps.now();
+  const { attempts, windowStart } = await deps.store.reserveJoinAttempt(gameId, now, JOIN_WINDOW_MS);
+  if (attempts > MAX_JOIN_ATTEMPTS) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((new Date(windowStart).getTime() + JOIN_WINDOW_MS - new Date(now).getTime()) / 1000));
+    return fail(429, `Too many wrong passwords for this game. Try again in ${Math.ceil(retryAfterSeconds / 60)} minute(s).`, { retryAfterSeconds });
+  }
+  if (!(await verifyPassword(password, await deps.store.getPasswordHash(gameId)))) {
+    return fail(403, 'Wrong password.', { attemptsLeft: MAX_JOIN_ATTEMPTS - attempts });
+  }
+  await deps.store.resetJoinAttempts(gameId);
+  return null;
+}
+
 const isParticipant = (g: AsyncGame, playerId: string) => g.hostId === playerId || g.guestId === playerId;
 
 /** What a non-participant may see of a waiting game (invite preview / open list). */
@@ -114,6 +141,7 @@ const summary = (g: AsyncGame) => ({
   id: g.id,
   status: g.status,
   visibility: g.visibility,
+  hasPassword: g.hasPassword,
   hostId: g.hostId,
   hostName: g.hostName,
   guestId: g.guestId,
@@ -204,8 +232,23 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
     if ((await deps.store.countActiveGames(me.id)) >= MAX_ACTIVE_GAMES) {
       return fail(409, `You already have ${MAX_ACTIVE_GAMES} active games.`);
     }
-    const game = newGame({ id: randomUUID(), hostId: me.id, hostName: me.name, visibility, turnHours, now: deps.now() });
-    await deps.store.insertGame(game);
+    let passwordHash: string | null = null;
+    if (body.password !== undefined && body.password !== null && body.password !== '') {
+      if (typeof body.password !== 'string' || body.password.length < PASSWORD_MIN || body.password.length > PASSWORD_MAX) {
+        return fail(400, `A password must be ${PASSWORD_MIN} to ${PASSWORD_MAX} characters.`);
+      }
+      passwordHash = await hashPassword(body.password);
+    }
+    const game = newGame({
+      id: randomUUID(),
+      hostId: me.id,
+      hostName: me.name,
+      visibility,
+      turnHours,
+      now: deps.now(),
+      hasPassword: passwordHash !== null,
+    });
+    await deps.store.insertGame(game, passwordHash);
     return json(201, { game });
   }
 
@@ -227,6 +270,10 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
         return fail(409, `You already have ${MAX_ACTIVE_GAMES} active games.`);
       }
       if (isExpiredChallenge(loaded, deps.now())) return fail(410, 'This challenge has expired.');
+      if (loaded.hasPassword && loaded.status === 'waiting' && loaded.hostId !== me.id) {
+        const denied = await checkJoinPassword(loaded.id, body.password, deps);
+        if (denied) return denied;
+      }
       const result = joinGame(loaded, me.id, me.name, deps.now());
       if (!result.ok) return fail(result.status, result.error);
       if (!(await deps.store.updateGame(result.game, loaded.version))) return fail(409, 'Someone else just joined this game.');

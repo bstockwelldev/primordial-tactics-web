@@ -16,7 +16,9 @@ test.before(async () => {
   if (!url) return;
   store = new PostgresStore(url);
   await store.sql.unsafe('drop table if exists push_subscriptions, games, players cascade');
-  await store.sql.unsafe(readFileSync(new URL('../supabase/migrations/0001_async_multiplayer.sql', import.meta.url), 'utf8'));
+  for (const file of ['0001_async_multiplayer.sql', '0002_game_passwords.sql']) {
+    await store.sql.unsafe(readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'));
+  }
 });
 test.after(async () => {
   if (store) await store.sql.end();
@@ -25,8 +27,8 @@ test.after(async () => {
 function api() {
   const clock = { t: Date.parse('2026-11-10T12:00:00.000Z') };
   const deps: Deps = { store, now: () => new Date(clock.t).toISOString(), rng: () => 0.99, cronSecret: 's' };
-  const call = (method: string, path: string, token?: string, body?: any) =>
-    handle({ method, path, headers: token ? { authorization: `Bearer ${token}` } : {}, body }, deps) as Promise<{ status: number; body: any }>;
+  const call = (method: string, path: string, token?: string, body?: any, query?: Record<string, string>) =>
+    handle({ method, path, headers: token ? { authorization: `Bearer ${token}` } : {}, body, query }, deps) as Promise<{ status: number; body: any }>;
   const player = async (name: string) => (await call('POST', '/players', undefined, { name })).body as { playerId: string; token: string };
   return { call, player, advance: (h: number) => (clock.t += h * 3600_000) };
 }
@@ -116,4 +118,56 @@ maybe('postgres: schema rejects bad rows and hides tables from the public roles'
       from pg_class c where relname = ${table} and relnamespace = 'public'::regnamespace`;
     assert.deepEqual({ ...row }, { rls: true, anon_can_read: false, auth_can_write: false }, table);
   }
+});
+
+maybe('postgres: password games store only a hash, gate joins, and count parallel guesses atomically', async () => {
+  const w = api();
+  const hana = await w.player('Hana');
+  const gus = await w.player('Gus');
+  const id = (await w.call('POST', '/games', hana.token, { password: 'raptor-7' })).body.game.id;
+
+  const [row] = await store.sql<Array<{ password_hash: string }>>`select password_hash from games where id = ${id}`;
+  assert.ok(row.password_hash.startsWith('scrypt:') && !row.password_hash.includes('raptor-7'));
+  assert.equal((await store.getGame(id))!.hasPassword, true);
+  assert.equal((await w.call('GET', `/games/${id}`, gus.token)).body.game.hasPassword, true);
+
+  const guessers = await Promise.all(Array.from({ length: 10 }, (_, i) => w.player(`G${i}`)));
+  const results = await Promise.all(guessers.map((g, i) => w.call('POST', `/games/${id}/join`, g.token, { password: `guess-${i}` })));
+  assert.equal(results.filter((r) => r.status === 403).length, 5, 'only 5 guesses were ever checked');
+  assert.equal(results.filter((r) => r.status === 429).length, 5);
+
+  w.advance(0.26);
+  assert.equal((await w.call('POST', `/games/${id}/join`, gus.token, { password: 'raptor-7' })).status, 200);
+  const [after] = await store.sql<Array<{ join_attempts: number; join_window_start: Date | null }>>`
+    select join_attempts, join_window_start from games where id = ${id}`;
+  assert.equal(after.join_attempts, 0, 'a correct password resets the limiter');
+  assert.equal(after.join_window_start, null);
+});
+
+maybe('postgres: open challenges page by createdAt, expire after 7 days, and the sweep deletes them', async () => {
+  const w = api();
+  const viewer = await w.player('Gus');
+  const hosts = await Promise.all(Array.from({ length: 33 }, (_, i) => w.player(`Host ${i}`)));
+  const ids: string[] = [];
+  for (const h of hosts) {
+    ids.push((await w.call('POST', '/games', h.token, { visibility: 'open' })).body.game.id);
+    w.advance(0.01);
+  }
+  const first = (await w.call('GET', '/games/open', viewer.token)).body;
+  assert.equal(first.games.length, 30);
+  assert.equal(first.hasMore, true);
+  const second = (await w.call('GET', '/games/open', viewer.token, undefined, { before: first.games[29].createdAt })).body;
+  assert.equal(second.hasMore, false);
+  const seen = new Set([...first.games, ...second.games].map((g: any) => g.id));
+  assert.ok(ids.every((id) => seen.has(id)), 'every challenge appears exactly once across the two pages');
+  assert.equal(first.games.length + second.games.length, seen.size);
+
+  const invite = (await w.call('POST', '/games', hosts[0].token, { visibility: 'invite' })).body.game.id;
+  w.advance(24 * 7 + 1);
+  assert.equal((await w.call('GET', '/games/open', viewer.token)).body.games.length, 0);
+  assert.equal((await w.call('POST', `/games/${ids[0]}/join`, viewer.token)).status, 410);
+  const sweep = (await w.call('GET', '/cron/sweep', 's')).body;
+  assert.ok(sweep.expired >= 33, JSON.stringify(sweep));
+  assert.equal(await store.getGame(ids[0]), null);
+  assert.ok(await store.getGame(invite), 'an invite game is never swept');
 });

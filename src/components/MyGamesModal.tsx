@@ -4,7 +4,7 @@ import { describeFailure, getGame, renamePlayer, timeAgo, timeLeft, GameSummary 
 import { enablePush, getPushState, PushState } from '../lib/push';
 import { ISLAND_CAMPAIGN_SECTORS } from '../game/constants';
 import { SOLO_SAVE_KEY, SoloSave } from '../game/soloSave';
-import { Users, X, Swords, Bell, Link2, Hourglass, Trophy, Plus, Cpu } from 'lucide-react';
+import { Users, X, Swords, Bell, Link2, Hourglass, Trophy, Plus, Cpu, Lock } from 'lucide-react';
 
 const TURN_OPTIONS = [
   { hours: 8, label: '8 hours' },
@@ -56,11 +56,17 @@ export const MyGamesModal: React.FC = () => {
   const [push, setPush] = useState<PushState>('off');
   const [soloSave, setSoloSave] = useState<SoloSave | null>(null);
   const [nameDraft, setNameDraft] = useState(playerName);
+  const [newPassword, setNewPassword] = useState('');
+  // Which locked game is asking for a password right now, and what has been typed.
+  const [askingId, setAskingId] = useState<string | null>(null);
+  const [joinPassword, setJoinPassword] = useState('');
 
   useEffect(() => {
     if (!showLobbyModal) return;
     setMessage(null);
     setNameDraft(playerName);
+    setAskingId(null);
+    setJoinPassword('');
     refreshGames();
     getPushState().then(setPush);
     try {
@@ -110,6 +116,36 @@ export const MyGamesModal: React.FC = () => {
     }
     setBusy(false);
   };
+
+  const passwordTooShort = newPassword.length > 0 && newPassword.length < 4;
+  const joinWithPassword = (id: string, password: string | undefined, then?: () => void) =>
+    run(async () => {
+      const err = await joinAsyncGame(id, password);
+      if (!err) then?.();
+      return err;
+    });
+
+  const lockBadge = () => (
+    <span className="inline-flex items-center gap-1 text-xs text-amber-300" title="Needs a password to join">
+      <Lock className="w-3 h-3" /> Password
+    </span>
+  );
+
+  const passwordField = (onSubmit: () => void) => (
+    <input
+      type="password"
+      autoComplete="off"
+      autoFocus
+      maxLength={64}
+      value={joinPassword}
+      onChange={(e) => setJoinPassword(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && joinPassword && onSubmit()}
+      placeholder="Game password"
+      aria-label="Game password"
+      data-testid="join-password-input"
+      className="min-h-11 w-full sm:w-44 px-3 rounded-lg bg-stone-800 border border-stone-700 text-sm text-stone-100"
+    />
+  );
 
   const yourTurn = myGames.filter((g) => g.status === 'in_progress' && g.activePlayerId === myPlayerId);
   const theirTurn = myGames.filter((g) => g.status === 'in_progress' && g.activePlayerId !== myPlayerId);
@@ -212,19 +248,17 @@ export const MyGamesModal: React.FC = () => {
             <div className="p-4 rounded-xl bg-cyan-950/40 border border-cyan-800/60 space-y-3">
               <p className="text-sm text-cyan-100">
                 <strong>{invite.hostName}</strong> invited you to a match ({invite.turnHours}h per turn).
+                {invite.hasPassword && ' Ask them for the password.'}
               </p>
+              {invite.hasPassword && passwordField(() => joinWithPassword(invite.id, joinPassword, () => { setInvite(null); clearPendingInvite(); }))}
               <div className="flex gap-2">
                 <button
-                  disabled={busy}
+                  disabled={busy || (invite.hasPassword && !joinPassword)}
                   className={primaryBtn}
                   onClick={() =>
-                    run(async () => {
-                      const err = await joinAsyncGame(invite.id);
-                      if (!err) {
-                        setInvite(null);
-                        clearPendingInvite();
-                      }
-                      return err;
+                    joinWithPassword(invite.id, invite.hasPassword ? joinPassword : undefined, () => {
+                      setInvite(null);
+                      clearPendingInvite();
                     })
                   }
                 >
@@ -272,7 +306,10 @@ export const MyGamesModal: React.FC = () => {
               <div key={g.id} className={row}>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-stone-100">{g.visibility === 'open' ? 'Open challenge' : 'Invite only'}</p>
-                  <p className="text-xs text-stone-400">{g.turnHours}h per turn</p>
+                  <p className="text-xs text-stone-400 flex flex-wrap items-center gap-x-2">
+                    <span>{g.turnHours}h per turn</span>
+                    {g.hasPassword && lockBadge()}
+                  </p>
                 </div>
                 <button className={quietBtn} onClick={() => copyInvite(g.id)}>{copiedId === g.id ? 'Link copied' : 'Copy invite link'}</button>
               </div>
@@ -315,10 +352,34 @@ export const MyGamesModal: React.FC = () => {
                   ))}
                 </select>
               </label>
-              <button disabled={busy || !isConnected} className={primaryBtn} onClick={() => run(() => createAsyncGame(visibility, turnHours))}>
+              <label className="text-xs text-stone-400 space-y-1">
+                <span className="block">Password (optional)</span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  maxLength={64}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  data-testid="new-game-password"
+                  className="min-h-11 w-40 px-3 rounded-lg bg-stone-800 border border-stone-700 text-sm text-stone-100"
+                />
+              </label>
+              <button
+                disabled={busy || !isConnected || passwordTooShort}
+                className={primaryBtn}
+                onClick={() =>
+                  run(async () => {
+                    const err = await createAsyncGame(visibility, turnHours, newPassword || undefined);
+                    if (!err) setNewPassword('');
+                    return err;
+                  })
+                }
+              >
                 Create game
               </button>
             </div>
+            {passwordTooShort && <p className="text-xs text-amber-300">A password needs at least 4 characters.</p>}
+            {newPassword && <p className="text-xs text-stone-500">Share the password with your opponent separately. It is never part of the invite link.</p>}
             <p className="text-xs text-stone-500">Miss a turn and it passes to your opponent. Miss two in a row and you forfeit.</p>
           </section>
 
@@ -327,9 +388,29 @@ export const MyGamesModal: React.FC = () => {
               <div key={g.id} className={row}>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-stone-100 truncate">{g.hostName}</p>
-                  <p className="text-xs text-stone-400">{g.turnHours}h per turn · posted {timeAgo(g.createdAt)}</p>
+                  <p className="text-xs text-stone-400 flex flex-wrap items-center gap-x-2">
+                    <span>{g.turnHours}h per turn · posted {timeAgo(g.createdAt)}</span>
+                    {g.hasPassword && lockBadge()}
+                  </p>
                 </div>
-                <button disabled={busy} className={primaryBtn} onClick={() => run(() => joinAsyncGame(g.id))}>Join</button>
+                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                  {g.hasPassword && askingId === g.id && passwordField(() => joinWithPassword(g.id, joinPassword))}
+                  <button
+                    disabled={busy || (askingId === g.id && !joinPassword)}
+                    className={primaryBtn}
+                    onClick={() => {
+                      if (!g.hasPassword) return joinWithPassword(g.id, undefined);
+                      if (askingId !== g.id) {
+                        setAskingId(g.id);
+                        setJoinPassword('');
+                        return;
+                      }
+                      joinWithPassword(g.id, joinPassword);
+                    }}
+                  >
+                    Join
+                  </button>
+                </div>
               </div>
             ))}
             {openGamesHasMore && (

@@ -8,7 +8,7 @@ const TOKEN_KEY = 'pt_player_token';
 
 export type GameSummary = Pick<
   AsyncGame,
-  | 'id' | 'status' | 'visibility' | 'hostId' | 'hostName' | 'guestId' | 'guestName' | 'activePlayerId'
+  | 'id' | 'status' | 'visibility' | 'hasPassword' | 'hostId' | 'hostName' | 'guestId' | 'guestName' | 'activePlayerId'
   | 'turnNumber' | 'turnHours' | 'turnDeadline' | 'winnerId' | 'endReason' | 'createdAt' | 'updatedAt'
 >;
 
@@ -69,9 +69,10 @@ export const renamePlayer = (name: string) => request('PATCH', '/players/me', { 
 export const listMyGames = () => request<{ games: GameSummary[] }>('GET', '/games');
 export const listOpenGames = (before?: string) =>
   request<{ games: GameSummary[]; hasMore: boolean }>('GET', `/games/open${before ? `?before=${encodeURIComponent(before)}` : ''}`);
-export const createGame = (visibility: 'open' | 'invite', turnHours: number) =>
-  request<{ game: AsyncGame }>('POST', '/games', { visibility, turnHours });
-export const joinGame = (id: string) => request<{ game: AsyncGame }>('POST', `/games/${id}/join`);
+export const createGame = (visibility: 'open' | 'invite', turnHours: number, password?: string) =>
+  request<{ game: AsyncGame }>('POST', '/games', { visibility, turnHours, ...(password ? { password } : {}) });
+export const joinGame = (id: string, password?: string) =>
+  request<{ game: AsyncGame }>('POST', `/games/${id}/join`, password ? { password } : undefined);
 export const getGame = (id: string) => request<{ game: AsyncGame | GameSummary; preview?: boolean }>('GET', `/games/${id}`);
 export const sendAction = (id: string, version: number, action: GameAction) =>
   request<{ game?: AsyncGame }>('POST', `/games/${id}/actions`, { version, action });

@@ -227,3 +227,102 @@ test('open challenges: paged newest first, expire after 7 days, invite links do 
   assert.equal(await w.store.getGame(ids[0]), null, 'the sweep deletes them');
   assert.ok(await w.store.getGame(invite), 'but never an invite game or one in play');
 });
+
+test('passwords: a protected game needs the right password, and the hash never leaves the server', async () => {
+  const w = world();
+  const hana = await w.player('Hana');
+  const gus = await w.player('Gus');
+
+  assert.equal((await w.call('POST', '/games', hana.token, { password: 'abc' })).status, 400, 'too short');
+  assert.equal((await w.call('POST', '/games', hana.token, { password: 'x'.repeat(65) })).status, 400, 'too long');
+  assert.equal((await w.call('POST', '/games', hana.token, { password: 1234 })).status, 400, 'not a string');
+
+  const created = await w.call('POST', '/games', hana.token, { visibility: 'open', password: 'raptor-7' });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.game.hasPassword, true);
+  const id = created.body.game.id;
+
+  const open = await w.call('GET', '/games/open', gus.token);
+  assert.equal(open.body.games[0].hasPassword, true, 'listed, with a lock flag');
+  const preview = await w.call('GET', `/games/${id}`, gus.token);
+  assert.equal(preview.body.preview, true);
+  assert.equal(preview.body.game.hasPassword, true);
+
+  const missing = await w.call('POST', `/games/${id}/join`, gus.token);
+  assert.equal(missing.status, 403);
+  assert.equal(missing.body.passwordRequired, true);
+  const wrong = await w.call('POST', `/games/${id}/join`, gus.token, { password: 'nope-nope' });
+  assert.equal(wrong.status, 403);
+  assert.equal(wrong.body.attemptsLeft, 4);
+
+  const joined = await w.call('POST', `/games/${id}/join`, gus.token, { password: 'raptor-7' });
+  assert.equal(joined.status, 200);
+  assert.equal(joined.body.game.status, 'in_progress');
+
+  // Nothing the server ever sent contains the password or its hash.
+  const everything = JSON.stringify([created.body, open.body, preview.body, missing.body, wrong.body, joined.body,
+    (await w.call('GET', `/games/${id}`, hana.token)).body, (await w.call('GET', '/games', hana.token)).body]);
+  assert.ok(!everything.includes('raptor-7') && !everything.includes('scrypt:'));
+  assert.ok(![...w.store.passwords.values()].some((h) => h.includes('raptor-7')), 'stored hashed, not in clear');
+});
+
+test('passwords: invite games can be protected too, and unprotected games ignore a password', async () => {
+  const w = world();
+  const hana = await w.player('Hana');
+  const gus = await w.player('Gus');
+  const tess = await w.player('Tess');
+
+  const locked = (await w.call('POST', '/games', hana.token, { visibility: 'invite', password: 'swordfish' })).body.game.id;
+  assert.equal((await w.call('POST', `/games/${locked}/join`, gus.token, { password: 'swordfish' })).status, 200);
+
+  const plain = (await w.call('POST', '/games', hana.token, { visibility: 'invite' })).body.game.id;
+  assert.equal((await w.call('POST', `/games/${plain}/join`, tess.token, { password: 'whatever' })).status, 200);
+
+  const empty = (await w.call('POST', '/games', hana.token, { password: '' })).body.game;
+  assert.equal(empty.hasPassword, false, 'an empty password means none');
+});
+
+test('passwords: 5 guesses per 15 minutes per game, then the window reopens', async () => {
+  const w = world();
+  const hana = await w.player('Hana');
+  const gus = await w.player('Gus');
+  const id = (await w.call('POST', '/games', hana.token, { password: 'raptor-7' })).body.game.id;
+  const guess = (pw: string) => w.call('POST', `/games/${id}/join`, gus.token, { password: pw });
+
+  for (let i = 1; i <= 5; i++) assert.equal((await guess(`wrong-${i}`)).status, 403);
+  const locked = await guess('raptor-7'); // even the right password is refused while locked
+  assert.equal(locked.status, 429);
+  assert.ok(locked.body.retryAfterSeconds > 0 && locked.body.retryAfterSeconds <= 900);
+
+  // Another player cannot sidestep the limit: it is per game.
+  const tess = await w.player('Tess');
+  assert.equal((await w.call('POST', `/games/${id}/join`, tess.token, { password: 'raptor-7' })).status, 429);
+
+  w.advance(0.26); // 15.6 minutes later
+  const ok = await guess('raptor-7');
+  assert.equal(ok.status, 200);
+  assert.equal(w.store.attempts.has(id), false, 'a correct password resets the counter');
+});
+
+test('passwords: parallel guesses cannot exceed the limit', async () => {
+  const w = world();
+  const hana = await w.player('Hana');
+  const id = (await w.call('POST', '/games', hana.token, { password: 'raptor-7' })).body.game.id;
+  const guessers = await Promise.all(Array.from({ length: 12 }, (_, i) => w.player(`G${i}`)));
+  const results = await Promise.all(
+    guessers.map((g, i) => w.call('POST', `/games/${id}/join`, g.token, { password: `guess-${i}` }))
+  );
+  assert.equal(results.filter((r) => r.status === 403).length, 5);
+  assert.equal(results.filter((r) => r.status === 429).length, 7);
+});
+
+test('passwords: hashing is salted and verifies only the right password', async () => {
+  const { hashPassword, verifyPassword } = await import('../api/_lib/password');
+  const a = await hashPassword('raptor-7');
+  const b = await hashPassword('raptor-7');
+  assert.notEqual(a, b, 'a fresh salt each time');
+  assert.equal(await verifyPassword('raptor-7', a), true);
+  assert.equal(await verifyPassword('Raptor-7', a), false);
+  assert.equal(await verifyPassword('raptor-7', null), false);
+  assert.equal(await verifyPassword('raptor-7', 'garbage'), false);
+});

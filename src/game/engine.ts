@@ -26,6 +26,8 @@ export interface AsyncGame {
   id: string;
   status: GameStatus;
   visibility: 'open' | 'invite';
+  /** True when joining needs the password. The password itself never leaves the server. */
+  hasPassword: boolean;
   hostId: string;
   hostName: string;
   guestId: string | null;
@@ -157,11 +159,13 @@ export function newGame(opts: {
   visibility: 'open' | 'invite';
   turnHours: number;
   now: string;
+  hasPassword?: boolean;
 }): AsyncGame {
   const g: AsyncGame = {
     id: opts.id,
     status: 'waiting',
     visibility: opts.visibility,
+    hasPassword: opts.hasPassword ?? false,
     hostId: opts.hostId,
     hostName: opts.hostName,
     guestId: null,
