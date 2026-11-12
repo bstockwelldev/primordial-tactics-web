@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import { useGame } from '../context/GameContext';
 import { PREHISTORIC_BIOMES, DINOSAUR_SPECIES, UNIT_PORTRAITS } from '../game/constants';
-import { calculateTamingChance, isTamingViable } from '../game/rules';
+import { calculateTamingChance, dartTorporGain, isTamingViable } from '../game/rules';
 import { DinosaurSpeciesId } from '../types/game';
 import {
   Compass,
@@ -26,6 +26,7 @@ interface WildEncounter {
   maxHp: number;
   currentTorpor: number;
   maxTorpor: number;
+  defense: number;
   diet: string;
   temperament: 'Aggressive' | 'Territorial' | 'Skittish';
   tamed: boolean;
@@ -38,6 +39,7 @@ export const TamingExpeditionView: React.FC = () => {
     tameCreature,
     setActiveScreen,
     craftItem,
+    consumeItem,
   } = useGame();
 
   const [selectedBiome, setSelectedBiome] = useState(PREHISTORIC_BIOMES[0]);
@@ -59,14 +61,16 @@ export const TamingExpeditionView: React.FC = () => {
     ] as DinosaurSpeciesId;
 
     const spec = DINOSAUR_SPECIES[randomSpeciesId];
+    const level = Math.floor(Math.random() * 5) + 1;
     const encounter: WildEncounter = {
       speciesId: randomSpeciesId,
       name: spec.name,
-      level: Math.floor(Math.random() * 5) + 1,
+      level,
       currentHp: spec.baseHp,
       maxHp: spec.baseHp,
       currentTorpor: 0,
       maxTorpor: spec.baseTorporMax,
+      defense: Math.round(spec.baseDefense * (1 + (level - 1) * 0.15)),
       diet: spec.diet,
       temperament: spec.diet === 'Carnivore' ? 'Aggressive' : 'Territorial',
       tamed: false,
@@ -103,10 +107,9 @@ export const TamingExpeditionView: React.FC = () => {
       return;
     }
 
-    // Deduct dart
-    inventory.tranq_dart = (inventory.tranq_dart || 1) - 1;
+    if (!consumeItem('tranq_dart')) return;
 
-    const torporGain = Math.floor(Math.random() * 20) + 35; // 35 - 55 torpor
+    const torporGain = dartTorporGain(Math.random(), wildDino.defense);
     const newTorpor = Math.min(wildDino.maxTorpor, wildDino.currentTorpor + torporGain);
 
     setWildDino({
@@ -134,7 +137,7 @@ export const TamingExpeditionView: React.FC = () => {
         setExpeditionLogs((prev) => [...prev, 'No Prime Kibble in inventory!']);
         return;
       }
-      inventory.primal_kibble = (inventory.primal_kibble || 1) - 1;
+      consumeItem('primal_kibble');
       setSelectedBait('kibble');
       setExpeditionLogs((prev) => [
         ...prev,
