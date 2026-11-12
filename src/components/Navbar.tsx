@@ -42,7 +42,7 @@ export const Navbar: React.FC = () => {
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-stone-950/90 backdrop-blur-md border-b border-stone-800 text-stone-100 shadow-xl">
+    <header className="lg:sticky lg:top-0 z-40 bg-stone-950/90 backdrop-blur-md border-b border-stone-800 text-stone-100 shadow-xl">
       {/* Top Bar: Title, Resources, Global Actions */}
       <div className="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center justify-between gap-3">
         {/* Brand & Connection */}
@@ -75,7 +75,7 @@ export const Navbar: React.FC = () => {
         </div>
 
         {/* Resources Bar */}
-        <div className="hidden lg:flex items-center gap-2 bg-stone-900/80 px-3 py-1.5 rounded-xl border border-stone-800/80 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 lg:gap-2 order-3 w-full lg:order-none lg:w-auto bg-stone-900/80 px-2 lg:px-3 py-1.5 rounded-xl border border-stone-800/80 text-xs">
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-cyan-950/70 text-cyan-300 border border-cyan-800/60 font-mono shadow-sm">
             <Cpu className="w-3.5 h-3.5 text-cyan-400" />
             <span className="font-bold">Cores:</span>
@@ -113,7 +113,7 @@ export const Navbar: React.FC = () => {
           <button
             onClick={quickAddDemoResources}
             title="Add Test Resources (Flint, Fiber, Amber, Meat)"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 transition-colors border border-stone-700"
+            className="flex items-center justify-center gap-1.5 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 transition-colors border border-stone-700"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">Add Supplies</span>
@@ -122,7 +122,7 @@ export const Navbar: React.FC = () => {
           {/* NPC Dialogue */}
           <button
             onClick={() => setActiveNpcModal('chief_kaeda')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 transition-colors shadow-sm"
+            className="flex items-center justify-center gap-1.5 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 transition-colors shadow-sm"
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>NPC Council</span>
@@ -131,7 +131,7 @@ export const Navbar: React.FC = () => {
           {/* Multiplayer Lobby */}
           <button
             onClick={() => setShowLobbyModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-orange-950/50 transition-all"
+            className="flex items-center justify-center gap-1.5 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-orange-950/50 transition-all"
           >
             <Users className="w-3.5 h-3.5" />
             <span>My Games</span>
@@ -145,7 +145,7 @@ export const Navbar: React.FC = () => {
           {/* Feature Roadmap */}
           <button
             onClick={() => setShowRoadmapModal(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-600/40 transition-colors"
+            className="flex items-center justify-center gap-1.5 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-600/40 transition-colors"
           >
             <Map className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Roadmap</span>
@@ -161,7 +161,7 @@ export const Navbar: React.FC = () => {
             <button
               key={item.id}
               onClick={() => setActiveScreen(item.id)}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center gap-2 min-h-11 lg:min-h-0 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
                 isActive
                   ? 'bg-amber-600/20 text-amber-400 border border-amber-500/40 shadow-inner shadow-amber-500/10'
                   : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/60 border border-transparent'
