@@ -93,18 +93,19 @@ test('board invariants hold through whole matches (all sectors + skirmish)', () 
   for (const sector of setups) {
     for (let seed = 1; seed <= 5; seed++) {
       const rng = createRng(seed);
+      const sectorGrid = buildArenaGrid((sector as any)?.islandId);
       let units = buildSoloUnits('Tester', starters, sector as any);
       for (let round = 1; round <= 15; round++) {
         for (const side of ['player', 'enemy'] as const) {
           units = units.map((u) => (u.isPlayer === (side === 'player') ? { ...u, ap: u.maxAp } : u));
-          units = runBotTurn(units, grid, round, rng, { side, timestamp: '' }).units;
+          units = runBotTurn(units, sectorGrid, round, rng, { side, timestamp: '' }).units;
           const alive = units.filter((u) => u.hp > 0);
           assert.equal(new Set(alive.map((u) => `${u.x},${u.y}`)).size, alive.length, 'no two living units share a tile');
           for (const u of units) {
             assert.ok(u.ap >= 0 && u.ap <= u.maxAp, `${u.id} ap in range`);
             assert.ok(u.hp >= 0 && u.hp <= u.maxHp, `${u.id} hp in range`);
             assert.ok(u.torpor >= 0 && u.torpor <= u.maxTorpor, `${u.id} torpor in range`);
-            if (u.hp > 0) assert.ok(grid.find((t) => t.x === u.x && t.y === u.y)?.walkable, `${u.id} on walkable tile`);
+            if (u.hp > 0) assert.ok(sectorGrid.find((t) => t.x === u.x && t.y === u.y)?.walkable, `${u.id} on walkable tile`);
           }
         }
       }
@@ -172,9 +173,10 @@ test('campaign: in all 12 sectors the bot hunts down an idle player and every ma
   for (const sector of ISLAND_CAMPAIGN_SECTORS) {
     for (let seed = 1; seed <= 8; seed++) {
       const units = buildSoloUnits('Tester', starters, sector as any);
-      const idle = simulateMatch({ units, grid, seed, player: 'passive', enemy: P.moderate });
+      const sg = buildArenaGrid(sector.islandId);
+      const idle = simulateMatch({ units, grid: sg, seed, player: 'passive', enemy: P.moderate });
       assert.equal(idle.winner, 'enemy', `${sector.id} vs idle player`);
-      const active = simulateMatch({ units, grid, seed, player: P.moderate, enemy: P.moderate });
+      const active = simulateMatch({ units, grid: sg, seed, player: P.moderate, enemy: P.moderate });
       assert.notEqual(active.winner, 'unfinished', `${sector.id} terminates`);
     }
   }
@@ -185,7 +187,21 @@ test('campaign: the opening sector is winnable by a moderate player with the sta
   let wins = 0;
   for (let seed = 1; seed <= SEEDS; seed++) {
     const units = buildSoloUnits('Tester', starters, sector as any);
-    if (simulateMatch({ units, grid, seed, player: P.moderate, enemy: P.moderate }).winner === 'player') wins++;
+    if (simulateMatch({ units, grid: buildArenaGrid(sector.islandId), seed, player: P.moderate, enemy: P.moderate }).winner === 'player') wins++;
   }
   assert.ok(wins / SEEDS >= 0.9, `won ${wins}/${SEEDS}`);
+});
+
+test('island terrain: water/mud/bones appear only on open grass, never rocks, foliage or spawns', () => {
+  const plain = buildArenaGrid();
+  for (const [island, type] of [['primoris', 'water'], ['caldera', 'mud'], ['magitek_core', 'bones']] as const) {
+    const g = buildArenaGrid(island);
+    assert.ok(g.some((t) => t.type === type), `${island} has ${type}`);
+    for (const t of g) {
+      const p = plain.find((q) => q.x === t.x && q.y === t.y)!;
+      if (t.type !== p.type) assert.equal(p.type, 'grass');
+      if (t.x <= 1 || t.x >= 6) assert.equal(t.type, p.type, 'spawn columns untouched');
+    }
+  }
+  assert.deepEqual(buildArenaGrid('tempest'), plain, 'tempest is open sky');
 });

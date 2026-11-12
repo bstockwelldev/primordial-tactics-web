@@ -6,6 +6,7 @@ import {
   calculateDamage,
   calculateTorporDamage,
   dartTorporGain,
+  moveApCost,
   isTamingViable,
   calculateTamingChance,
   canEvolveDino,
@@ -221,4 +222,24 @@ test('dartTorporGain: 35-54 base, reduced by the wild dino defense, never below 
   assert.equal(dartTorporGain(0, 38), calculateTorporDamage(35, 38));
   assert.ok(dartTorporGain(0.5, 38) < dartTorporGain(0.5, 0), 'armoured dinos take less torpor');
   assert.equal(dartTorporGain(5, 0), 54, 'out-of-range rolls are clamped');
+});
+
+test('moveApCost: water adds 1 AP, mud cuts reach by 1, flyers ignore terrain', () => {
+  const walker = { speed: 3 };
+  assert.equal(moveApCost(walker, { type: 'grass' }, 2), 1);
+  assert.equal(moveApCost(walker, { type: 'water' }, 2), 2);
+  assert.equal(moveApCost(walker, { type: 'mud' }, 3), Infinity);
+  assert.equal(moveApCost(walker, { type: 'mud' }, 2), 1);
+  assert.equal(moveApCost({ speed: 3, speciesId: 'pteranodon' }, { type: 'mud' }, 3), 2);
+  assert.equal(moveApCost({ speed: 3, speciesId: 'pteranodon' }, { type: 'water' }, 1), 1);
+  assert.equal(moveApCost(walker, { type: 'grass' }, 4), Infinity);
+});
+
+test('canUnitMoveTo charges terrain: a water tile needs the extra AP', () => {
+  const grid = [{ x: 0, y: 0, type: 'grass' as const, walkable: true }, { x: 2, y: 0, type: 'water' as const, walkable: true }];
+  const base = { x: 0, y: 0, speed: 3 };
+  assert.equal(canUnitMoveTo({ ...base, ap: 1 }, 2, 0, grid, [], 'u').valid, false);
+  const ok = canUnitMoveTo({ ...base, ap: 2 }, 2, 0, grid, [], 'u');
+  assert.ok(ok.valid);
+  assert.equal(ok.apCost, 2);
 });
