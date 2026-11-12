@@ -11,10 +11,12 @@ import {
   assignSlots,
   canControl,
   controllerOf,
+  defaultAssignments,
   firstPhase,
   isHumanControlled,
   livingSlots,
   nextPhase,
+  swapAssignments,
   swapSlots,
   validateSplit,
 } from './party';
@@ -169,4 +171,16 @@ test('the headless simulator plays a four-unit party to a finish', () => {
   const b = simulateMatch({ units, grid, seed: 7, player: BOT_PROFILES.moderate, enemy: BOT_PROFILES.moderate });
   assert.notEqual(a.winner, 'unfinished');
   assert.deepEqual(a, b, 'deterministic for a seed');
+});
+
+test('setup helpers: default assignments mirror the engine split, and swapping them matches swapSlots', () => {
+  const units = coop();
+  const defaults = defaultAssignments(units);
+  assert.deepEqual(defaults, { player_hero: 0, player_raptor: 0, player_trike: 1, player_guest: 1 });
+  assert.ok(!Object.keys(defaults).some((id) => id.startsWith('enemy')), 'bots are not assignable');
+  const swapped = swapAssignments(defaults);
+  assert.deepEqual(swapped, { player_hero: 1, player_raptor: 1, player_trike: 0, player_guest: 0 });
+  assert.deepEqual(assignSlots(units, swapped), swapSlots(units));
+  assert.deepEqual(swapAssignments(swapped), defaults);
+  assert.deepEqual(defaultAssignments(solo()), { player_hero: 0, player_raptor: 0, player_trike: 0 });
 });

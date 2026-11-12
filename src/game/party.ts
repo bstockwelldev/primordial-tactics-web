@@ -66,3 +66,13 @@ export function assignSlots(units: UnitEntity[], assignments: Record<string, Slo
 export function swapSlots(units: UnitEntity[]): UnitEntity[] {
   return units.map((u) => (isHumanControlled(u) ? { ...u, controller: controllerOf(u) === 0 ? 1 : 0 } : u));
 }
+
+/** The slot each human unit currently has, as a map the setup screen can edit. */
+export function defaultAssignments(units: UnitEntity[]): Record<string, Slot> {
+  return Object.fromEntries(units.filter(isHumanControlled).map((u) => [u.id, controllerOf(u)]));
+}
+
+/** The same map with every unit handed to the other player. */
+export function swapAssignments(assignments: Record<string, Slot>): Record<string, Slot> {
+  return Object.fromEntries(Object.entries(assignments).map(([id, slot]) => [id, slot === 0 ? 1 : 0] as [string, Slot]));
+}
