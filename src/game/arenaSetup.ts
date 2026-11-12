@@ -59,6 +59,11 @@ export function buildArenaGrid(islandId?: string): GridTile[] {
   return tiles;
 }
 
+/** Pass & play: a buddy joins the host's party (see docs/local-coop-spec.md). */
+export interface PartyOptions {
+  guestName: string;
+}
+
 /**
  * Player squad (commander + first two tamed dinos) and the enemy squad: the
  * sector's level-scaled squad for a campaign mission, otherwise the default rivals.
@@ -67,7 +72,8 @@ export function buildSoloUnits(
   playerName: string,
   tamedDinos: TamedDino[],
   activeSectorMission: IslandSector | null,
-  playerLevel: number = BALANCE.startLevel
+  playerLevel: number = BALANCE.startLevel,
+  party?: PartyOptions
 ): UnitEntity[] {
   // Player Hero is Human class with long-range tech utility
   const playerHeroUnit: UnitEntity = {
@@ -171,8 +177,30 @@ export function buildSoloUnits(
     statusEffects: [],
   };
 
+  // The buddy's commander is a second Human-class unit built like the host's. It keeps ownerId
+  // 'player_me': winning, rewards and saves belong to the host (spec 3.5), and the arena identifies
+  // the winning side by that id. Which human commands a unit is the separate `controller` field.
+  const guestCommander: UnitEntity = {
+    ...playerHeroUnit,
+    id: 'player_guest',
+    name: `${party?.guestName.trim() || 'Buddy'} (Commander)`,
+    x: 0,
+    y: 3,
+    abilities: playerHeroUnit.abilities.map((a) => ({ ...a })),
+    statusEffects: [],
+  };
+  // Default split: host keeps the commander and first dino; buddy gets the guest commander and second dino.
+  const roster: UnitEntity[] = party
+    ? [
+        { ...playerHeroUnit, controller: 0 },
+        { ...playerDino1, controller: 0 },
+        { ...playerDino2, controller: 1 },
+        { ...guestCommander, controller: 1 },
+      ]
+    : [playerHeroUnit, playerDino1, playerDino2];
+
   const grow = playerLevelScale(playerLevel);
-  const playerUnits = [playerHeroUnit, playerDino1, playerDino2].map((u) =>
+  const playerUnits = roster.map((u) =>
     grow === 1
       ? u
       : {

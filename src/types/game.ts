@@ -130,6 +130,8 @@ export interface UnitEntity {
   id: string;
   isPlayer: boolean;
   ownerId: string;
+  /** Pass & play: which human (slot 0 or 1) commands this unit. Absent in solo matches, meaning slot 0. */
+  controller?: 0 | 1;
   name: string;
   speciesId?: DinosaurSpeciesId;
   unitClass: UnitClass;
