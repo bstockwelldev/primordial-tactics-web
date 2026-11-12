@@ -1,6 +1,6 @@
 # Primordial Tactics — handoff
 
-State as of 2026-11-09 ~17:15 CST. This is the context a new session (Claude Cloud Agent) needs to pick up the repo cold. The repo's living docs are `README.md`, `docs/GDD.md` (v1.2), `docs/architecture.md`, and `docs/game-design-adaptation.md` (14 gaps) — this file is the state snapshot, not a duplicate of them.
+State as of 2026-11-12 (after PR #5 merged and deployed). This is the context a new session (Claude Cloud Agent) needs to pick up the repo cold. The repo's living docs are `README.md`, `docs/GDD.md` (v1.2), `docs/architecture.md`, and `docs/game-design-adaptation.md` (14 gaps) — this file is the state snapshot, not a duplicate of them.
 
 ## Goal
 
@@ -19,12 +19,15 @@ Consequence: the persistent Socket.io arena server may be unnecessary for MVP. T
 ## Current state
 
 - **Repo:** `bstockwelldev/primordial-tactics-web` (public, `main`). Scaffold is a full AI Studio app, not a skeleton: 6 screens (Base Camp, Island Campaign, Magitek Lab, Taming Expedition, Evolution Tree, Tactical Arena) + 4 modals (NPC Dialogue, AI Feedback, Roadmap, Multiplayer Lobby), Express + Socket.io arena server (`server.ts`, 8×6 grid, AP economy, 45s turns), Gemini NPC/coaching hooks.
-- **Main is at `072f6017`** (both merges). Commits: `0fd1474` initial, `f5600e69` scaffold, `999a825` docs #1, `8ddd7142`–`f34e0ea8` Firebase removal (5 commits), `d5fb9d8d` docs rewrite (pushed empty by mistake — see below), `80817cb1` restore, `033a1e9f` split wiring, `e912b3cc` handoff doc + package rename, merges `73154b6d` (PR #1) + `072f6017` (PR #2).
-- **PR #1 MERGED:** https://github.com/bstockwelldev/primordial-tactics-web/pull/1 — `feat/vercel-split` → `main` (merge `73154b6d`). Vercel split wiring (see below).
-- **PR #2 MERGED:** package rename + this doc, branch `docs/handoff` (merge `072f6017`).
-- **Vercel: project NOT created — blocked.** `create_git_project` returned 403: the connected Vercel identity does not have permission to create a project on team `brandon-stockwells-projects` (`team_K491uXHCpt0VTHey4NcqMqhl`, Hobby). No CLI fallback with credentials exists on this VM. **Manual step (2 min, Brandon or next session):** Vercel dashboard → Add New → Project → Import `bstockwelldev/primordial-tactics-web` → team `brandon-stockwells-projects` → Framework Vite (auto-detected from `package.json`/`bun.lock`) → Deploy. That auto-deploys `main` to production and creates preview deployments for open PRs. The repo side is ready: `vercel.json` (on PR #1) sets Vite / `bun run build` / `dist` / SPA fallback. No env vars needed for the first deploy (see below).
-- **Branch note:** `claude/amazing-cerf-7db9o5` exists at `80817cb1` — not created by this session; leave it alone.
-- **Local run never verified from the agent VM** (no checkout path there). First local run must confirm `bun install`, `bun run lint`, `bun run build`. `bun install` also regenerates `bun.lock` (still lists the removed `firebase` dep — stale, harmless until regen).
+- **Main is at `011c3af`** (merge of PR #5, 2026-11-12 17:08 UTC).
+- **PR #1, #2, #3 MERGED** (Vercel split wiring, handoff doc, handoff update).
+- **PR #4 MERGED 2026-11-10:** async multiplayer (engine, API, Postgres store, My Games, push, timers), state-machine bot, single campaign payout.
+- **PR #5 MERGED 2026-11-12:** arena attack controls above the board + range overlay, token art moved to `public/tokens`, My Games error reasons + Retry, `api/tsconfig.json` (removes the TS2688 build warning).
+- **Live:** Vercel project `primordial-tactics-web` (team `brandon-stockwells-projects`) exists; `main` -> production at https://primordial-tactics-web.vercel.app, PR branches -> preview. Production deploy of `011c3af` is READY. Supabase project `primordial-tactics` (`cauddcsbsaskxjcaobxv`) is the single database (no preview DB).
+- **Verified on production 2026-11-12 (by running):** `/api/health` returns `{"status":"ok"}`; token portraits load (8/8 images in the arena); arming Tranq Rifle in the arena shows the armed state and an out-of-range message. Earlier (PR #4): two-player game, timeout and resign against production.
+- **Env status (names only):** Production has `POSTGRES_URL` and `CRON_SECRET`. **`VAPID_PUBLIC_KEY` is missing in Production** (`/api/push/key` returns `{"publicKey":null}`, so "Turn on notifications" cannot work). Preview still serves a key pair that was rotated out; re-set all three VAPID vars (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) for Production and Preview with the new pair. Owner sets these in the Vercel dashboard.
+- **Connector limits:** the Vercel connector can list/read deployments and deploy, but gets 403 on env var read/write and project create. Env changes are a dashboard step.
+- **Local run:** `bun install`, `bun run lint`, `bun run build`, `bun run test` verified in prior sessions.
 
 ## Decisions (locked, do not relitigate without Brandon)
 
@@ -48,26 +51,20 @@ Consequence: the persistent Socket.io arena server may be unnecessary for MVP. T
 
 `.env.example` still carries AI Studio comments and a redacted `GEMINI_API_KEY` value — refresh it when the arena host is chosen; do not copy the redacted value.
 
-## Async multiplayer — built 2026-11-10 (branch `claude/amazing-cerf-7db9o5`, not merged, not deployed)
+## Async multiplayer — built 2026-11-10, merged and live
 
 Spec + as-built notes: `docs/async-multiplayer-spec.md`. Layout: `src/game/engine.ts` (pure match engine), `api/_lib/` (`app.ts` HTTP handler, `store.ts` interface + memory store, `postgresStore.ts`, `push.ts`, `runtime.ts`), `api/index.ts` (the Vercel function), `server.ts` (dev server mounting the same handler; Socket.io removed), `src/lib/asyncApi.ts` + `src/lib/push.ts` + `src/components/MyGamesModal.tsx` (client), `public/sw.js` + `public/manifest.webmanifest`.
 
 Verified: `bun run test` (62 tests; the 6 Postgres ones need `TEST_POSTGRES_URL` pointing at an empty scratch database and are skipped otherwise), `bun run lint`, `bun run build`, and a two-browser Playwright run against Postgres 16 (create → invite link → join → moves → end turn → timeout → cron forfeit → resign → solo resume).
 
-**To go live (Brandon):**
-1. Create the Vercel project (dashboard import, as below).
-2. Connect the Supabase database `primordial-tactics` to that Vercel project (Vercel → Storage) so `POSTGRES_URL` is injected.
-3. Add env vars `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`.
-4. First deploy is the first real test of the serverless function, the `/api/*` rewrite and the cron — check `/api/health`, then play a game.
-
-Not verified anywhere: real push delivery to a phone (needs HTTPS + VAPID keys), and the Vercel deployment itself.
+**Remaining go-live item (Brandon):** set the new VAPID pair in Vercel (Production + Preview), redeploy, confirm `/api/push/key` returns a key, then test "Turn on notifications" end to end on a real device. Real push delivery to a phone has not been verified.
 
 Local dev: `bun run dev` with no `POSTGRES_URL` uses an in-memory store (games vanish on restart); set `POSTGRES_URL` to use a real database.
 
 ## Outstanding — next session (in rough order)
 
-1. **Async multiplayer design (the first decision).** Turn state is currently in-memory (`rooms` Map in `server.ts`) — it dies with the process and can't be shared across players/devices. Design: persisted turn store (Vercel KV / Postgres / Blob — pick one), long turn timer (duration TBD), notification at end of turn (mechanism TBD — push / email / in-app?), multiple concurrent games per player, game list/lobby for in-progress games. Answer the PvE and Campaign (?) questions above. If async replaces the socket layer, the persistent arena host may be unnecessary — the REST endpoints are stateless and could move to Vercel serverless functions. Propose the design; don't build it until Brandon approves.
-2. **Vercel project creation (manual step above)** — PR #1 is merged, so the import deploys `main` with the split wiring + `vercel.json` to production, and future PRs get previews.
+1. **Async multiplayer design — done** (PR #4, spec in `docs/async-multiplayer-spec.md`).
+2. **Vercel project — done.** Remaining: VAPID env vars (see Current state).
 3. **Bot quality + double-liberate guard — done 2026-11-09** (`src/game/bot.ts` state machine, seeded RNG, headless simulator + skill checks; single payout path). Async design is specced in `docs/async-multiplayer-spec.md` (approved direction, spec awaiting review). **Balance findings from the simulator (not fixed — design calls):** the default skirmish rival squad is much weaker than the player squad (it loses to any active player); campaign difficulty is not monotonic for the starter squad — `sector_primoris_2` (threat 2, the first mission) is won ~9% of the time by a moderate-skill proxy, while `sector_caldera_1` (threat 3) and `sector_tempest_1` (threat 4) are won ~98–100%; threat 5+ is 0%. Second mover has a large edge in even matches.
 4. **Name: Primordial vs Primal.** Metadata/title/server strings say "Primal Tactics: Dinosaur Survival RPG"; repo + GDD say "Primordial". Brandon's call.
 5. **First local run:** `bun install` (regen `bun.lock`), `bun run lint`, `bun run build`.
