@@ -1,6 +1,6 @@
 # Local co-op / pass & play on the campaign — spec
 
-Status: **DRAFT 2026-11-12, not reviewed or locked.** Nothing is built. Open questions are in section 9; each has a recommended default so the spec can be locked quickly. The GDD is the authority for mechanics and theme: it describes one player leading a character and companions, so two humans sharing a party is a new mechanic that needs Brandon's sign-off before it is built.
+Status: **LOCKED 2026-11-12** with the section 9 defaults, as chosen by Brandon. Nothing is built yet. Not yet confirmed: that pass & play (both people at one screen) is what Brandon wants rather than online co-op (see risks); the lock assumes it is. The GDD is the authority for mechanics and theme: it describes one player leading a character and companions, so this new mechanic should be recorded there (slice 5) if Brandon agrees.
 
 ## 1. Goal
 
@@ -129,7 +129,7 @@ Slices 1 and 4 can be developed in parallel; 2 and 3 depend on 1.
 - **Human vs human on one device:** the enemy side becomes slot 2; needs its own balance (fixed default squads, as today's PvP).
 - **Buddy profile:** a second local save so the buddy keeps XP and dinos.
 
-## 9. Open questions (answer before locking; defaults are what the spec assumes)
+## 9. Decisions (locked 2026-11-12; the Default column is the decision)
 
 | # | Question | Default |
 |---|---|---|
