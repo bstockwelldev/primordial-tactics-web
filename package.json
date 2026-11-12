@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "balance": "tsx scripts/difficulty-report.ts",
     "test": "tsx --test src/game/*.test.ts tests/*.test.ts"
   },
   "dependencies": {
