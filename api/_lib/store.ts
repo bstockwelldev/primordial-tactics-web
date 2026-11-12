@@ -22,7 +22,15 @@ export interface Store {
   getPlayerByTokenHash(tokenHash: string): Promise<Player | null>;
   renamePlayer(id: string, name: string): Promise<void>;
 
-  insertGame(game: AsyncGame): Promise<void>;
+  insertGame(game: AsyncGame, passwordHash?: string | null): Promise<void>;
+  /** The stored password hash, or null when the game has none. Never returned inside an AsyncGame. */
+  getPasswordHash(gameId: string): Promise<string | null>;
+  /**
+   * Counts one password guess against the game in an atomic step, BEFORE the password is checked, so
+   * concurrent guesses cannot exceed the limit. The count restarts once `windowMs` has passed.
+   */
+  reserveJoinAttempt(gameId: string, now: string, windowMs: number): Promise<{ attempts: number; windowStart: string }>;
+  resetJoinAttempts(gameId: string): Promise<void>;
   getGame(id: string): Promise<AsyncGame | null>;
   /**
    * Writes `game` only if the stored version still equals `expectedVersion`, and
@@ -51,6 +59,8 @@ const copy = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 export class MemoryStore implements Store {
   players = new Map<string, Player & { tokenHash: string }>();
   games = new Map<string, AsyncGame>();
+  passwords = new Map<string, string>();
+  attempts = new Map<string, { attempts: number; windowStart: string }>();
   subs = new Map<string, PushSubscriptionRecord>();
 
   async createPlayer(p: Player & { tokenHash: string }) {
@@ -64,8 +74,22 @@ export class MemoryStore implements Store {
     const p = this.players.get(id);
     if (p) p.name = name;
   }
-  async insertGame(game: AsyncGame) {
+  async insertGame(game: AsyncGame, passwordHash?: string | null) {
     this.games.set(game.id, copy(game));
+    if (passwordHash) this.passwords.set(game.id, passwordHash);
+  }
+  async getPasswordHash(gameId: string) {
+    return this.passwords.get(gameId) ?? null;
+  }
+  async reserveJoinAttempt(gameId: string, now: string, windowMs: number) {
+    const cur = this.attempts.get(gameId);
+    const fresh = !cur || new Date(cur.windowStart).getTime() <= new Date(now).getTime() - windowMs;
+    const next = fresh ? { attempts: 1, windowStart: now } : { attempts: cur.attempts + 1, windowStart: cur.windowStart };
+    this.attempts.set(gameId, next);
+    return { ...next };
+  }
+  async resetJoinAttempts(gameId: string) {
+    this.attempts.delete(gameId);
   }
   async getGame(id: string) {
     const g = this.games.get(id);

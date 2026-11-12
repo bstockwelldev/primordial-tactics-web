@@ -20,6 +20,7 @@ interface GameRow {
   guest_timeouts: number;
   winner_id: string | null;
   end_reason: AsyncGame['endReason'];
+  password_hash: string | null;
   state: { units: AsyncGame['units']; actionLogs: AsyncGame['actionLogs']; hostName: string; guestName: string | null };
   version: number;
   created_at: Date;
@@ -33,6 +34,7 @@ function fromRow(r: GameRow): AsyncGame {
     id: r.id,
     status: r.status,
     visibility: r.visibility,
+    hasPassword: r.password_hash !== null, // the hash itself stays in the database layer
     hostId: r.host_id,
     hostName: r.state.hostName,
     guestId: r.guest_id,
@@ -78,13 +80,35 @@ export class PostgresStore implements Store {
     await this.sql`update players set name = ${name} where id = ${id}`;
   }
 
-  async insertGame(g: AsyncGame) {
+  async insertGame(g: AsyncGame, passwordHash: string | null = null) {
     await this.sql`
       insert into games (id, status, visibility, host_id, guest_id, active_player_id, turn_number, turn_hours,
-        turn_deadline, host_timeouts, guest_timeouts, winner_id, end_reason, state, version, created_at, updated_at)
+        turn_deadline, host_timeouts, guest_timeouts, winner_id, end_reason, state, version, created_at, updated_at,
+        password_hash)
       values (${g.id}, ${g.status}, ${g.visibility}, ${g.hostId}, ${g.guestId}, ${g.activePlayerId}, ${g.turnNumber},
         ${g.turnHours}, ${g.turnDeadline}, ${g.hostTimeouts}, ${g.guestTimeouts}, ${g.winnerId}, ${g.endReason},
-        ${this.sql.json(stateOf(g) as any)}, ${g.version}, ${g.createdAt}, ${g.updatedAt})`;
+        ${this.sql.json(stateOf(g) as any)}, ${g.version}, ${g.createdAt}, ${g.updatedAt},
+        ${passwordHash})`;
+  }
+  async getPasswordHash(gameId: string) {
+    const rows = await this.sql<Array<{ password_hash: string | null }>>`select password_hash from games where id = ${gameId}`;
+    return rows[0]?.password_hash ?? null;
+  }
+  async reserveJoinAttempt(gameId: string, now: string, windowMs: number) {
+    const windowStart = new Date(new Date(now).getTime() - windowMs).toISOString();
+    // One statement, so concurrent guesses are counted one after another.
+    const rows = await this.sql<Array<{ join_attempts: number; join_window_start: Date }>>`
+      update games set
+        join_attempts = case when join_window_start is null or join_window_start <= ${windowStart}::timestamptz
+                             then 1 else join_attempts + 1 end,
+        join_window_start = case when join_window_start is null or join_window_start <= ${windowStart}::timestamptz
+                                 then ${now}::timestamptz else join_window_start end
+      where id = ${gameId}
+      returning join_attempts, join_window_start`;
+    return { attempts: rows[0].join_attempts, windowStart: new Date(rows[0].join_window_start).toISOString() };
+  }
+  async resetJoinAttempts(gameId: string) {
+    await this.sql`update games set join_attempts = 0, join_window_start = null where id = ${gameId}`;
   }
   async getGame(id: string) {
     const rows = await this.sql<GameRow[]>`select * from games where id = ${id}`;

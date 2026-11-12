@@ -65,8 +65,8 @@ interface GameContextType {
   loadMoreOpenGames: () => Promise<void>;
   yourTurnCount: number;
   refreshGames: () => Promise<void>;
-  createAsyncGame: (visibility: 'open' | 'invite', turnHours: number) => Promise<string | null>;
-  joinAsyncGame: (gameId: string) => Promise<string | null>;
+  createAsyncGame: (visibility: 'open' | 'invite', turnHours: number, password?: string) => Promise<string | null>;
+  joinAsyncGame: (gameId: string, password?: string) => Promise<string | null>;
   openAsyncGame: (gameId: string) => Promise<string | null>;
   /** Sends one action for the open game. Resolves to an error message, or null on success. */
   sendGameAction: (action: GameAction) => Promise<string | null>;
@@ -284,15 +284,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   };
 
-  const createAsyncGame = async (visibility: 'open' | 'invite', turnHours: number): Promise<string | null> => {
-    const res = await asyncApi.createGame(visibility, turnHours);
+  const createAsyncGame = async (visibility: 'open' | 'invite', turnHours: number, password?: string): Promise<string | null> => {
+    const res = await asyncApi.createGame(visibility, turnHours, password);
     if (!res.ok) return res.data.error || 'Could not create the game.';
     await refreshGames();
     return null;
   };
 
-  const joinAsyncGame = async (gameId: string): Promise<string | null> => {
-    const res = await asyncApi.joinGame(gameId);
+  const joinAsyncGame = async (gameId: string, password?: string): Promise<string | null> => {
+    const res = await asyncApi.joinGame(gameId, password);
     if (!res.ok) return res.data.error || 'Could not join the game.';
     setAsyncGame(res.data.game);
     setActiveScreen('arena');
