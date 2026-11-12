@@ -552,7 +552,7 @@ export const TacticalArenaView: React.FC = () => {
           {!currentRoom ? (
             <button
               onClick={() => setShowLobbyModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white shadow cursor-pointer transition-transform hover:scale-105"
+              className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white shadow cursor-pointer transition-transform hover:scale-105"
             >
               <Users className="w-3.5 h-3.5" />
               <span>PvP Duel</span>
@@ -581,7 +581,7 @@ export const TacticalArenaView: React.FC = () => {
           {!currentRoom && (
           <button
             onClick={initSoloMatch}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 cursor-pointer"
+            className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset Match</span>
@@ -591,7 +591,7 @@ export const TacticalArenaView: React.FC = () => {
           <button
             onClick={handleEndTurn}
             disabled={!isMyTurn || isMatchOver}
-            className={`px-4 py-2 rounded-xl text-xs font-bold shadow-lg transition-all ${
+            className={`min-h-11 lg:min-h-0 px-4 py-2 rounded-xl text-xs font-bold shadow-lg transition-all ${
               isMyTurn && !isMatchOver
                 ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer shadow-emerald-950/50 hover:scale-105'
                 : 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
@@ -733,7 +733,7 @@ export const TacticalArenaView: React.FC = () => {
             )}
 
             {/* The 8x6 Tactical Grid */}
-            <div className="min-w-[620px] max-w-2xl mx-auto grid grid-cols-8 gap-2 p-2.5 rounded-xl bg-stone-900/60 border border-stone-800/80 shadow-inner">
+            <div className="w-full max-w-2xl mx-auto grid grid-cols-8 gap-1 sm:gap-2 p-1.5 sm:p-2.5 rounded-xl bg-stone-900/60 border border-stone-800/80 shadow-inner">
               {gridTiles.map((tile) => {
                 const unitOnTile = activeUnits.find(
                   (u) => u.x === tile.x && u.y === tile.y && u.hp > 0
@@ -778,7 +778,7 @@ export const TacticalArenaView: React.FC = () => {
                     onClick={() => handleTileClick(tile.x, tile.y)}
                     onMouseEnter={() => setHoveredTile(tile)}
                     onMouseLeave={() => setHoveredTile(null)}
-                    className={`aspect-square rounded-xl p-1 relative flex flex-col justify-between items-center transition-all cursor-pointer select-none border group ${
+                    className={`aspect-square min-w-0 rounded-lg sm:rounded-xl p-0.5 sm:p-1 relative flex flex-col justify-between items-center transition-all cursor-pointer select-none border group ${
                       !tile.walkable
                         ? 'bg-stone-950/90 border-stone-800/80 cursor-not-allowed opacity-90'
                         : isSelected
@@ -797,7 +797,7 @@ export const TacticalArenaView: React.FC = () => {
                     }`}
                   >
                     {/* Top Tile Coordinates & Terrain Tag */}
-                    <div className="w-full flex justify-between items-center text-[9px] text-stone-500 font-mono px-0.5 leading-none">
+                    <div className="w-full hidden sm:flex justify-between items-center text-[9px] text-stone-500 font-mono px-0.5 leading-none">
                       <span>{tile.x},{tile.y}</span>
                       {!tile.walkable && (
                         <span className="text-stone-500 font-bold uppercase text-[8px]">Crags</span>
@@ -813,7 +813,7 @@ export const TacticalArenaView: React.FC = () => {
                     {unitOnTile ? (
                       <div className="w-full flex flex-col items-center justify-center space-y-1">
                         <div
-                          className={`relative w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden shadow-xl transition-transform group-hover:scale-105 border-2 ${
+                          className={`relative w-7 h-7 sm:w-12 sm:h-12 rounded-full overflow-hidden shadow-xl transition-transform group-hover:scale-105 border-2 ${
                             unitOnTile.isPlayer
                               ? 'border-emerald-400 ring-2 ring-emerald-500/40 shadow-emerald-950'
                               : 'border-red-500 ring-2 ring-red-500/40 shadow-red-950'
@@ -1355,7 +1355,7 @@ export const TacticalArenaView: React.FC = () => {
               />
               <button
                 type="submit"
-                className="p-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white cursor-pointer"
+                className="p-2 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 flex items-center justify-center rounded-lg bg-amber-600 hover:bg-amber-500 text-white cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
               </button>
