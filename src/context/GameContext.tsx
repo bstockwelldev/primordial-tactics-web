@@ -61,6 +61,8 @@ interface GameContextType {
   setCurrentRoom: (room: ArenaRoomState | null) => void;
   myGames: GameSummary[];
   openGames: GameSummary[];
+  openGamesHasMore: boolean;
+  loadMoreOpenGames: () => Promise<void>;
   yourTurnCount: number;
   refreshGames: () => Promise<void>;
   createAsyncGame: (visibility: 'open' | 'invite', turnHours: number) => Promise<string | null>;
@@ -177,6 +179,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [asyncGame, setAsyncGame] = useState<AsyncGame | null>(null);
   const [myGames, setMyGames] = useState<GameSummary[]>([]);
   const [openGames, setOpenGames] = useState<GameSummary[]>([]);
+  const [openGamesHasMore, setOpenGamesHasMore] = useState(false);
   const [pendingInviteId, setPendingInviteId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('game')
   );
@@ -225,8 +228,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsConnected(true);
     setConnectionError(null);
     setMyGames(mine.data.games);
-    if (open.ok) setOpenGames(open.data.games);
+    if (open.ok) {
+      setOpenGames(open.data.games);
+      setOpenGamesHasMore(open.data.hasMore);
+    }
   }, []);
+
+  // Appends the next page of open challenges below the ones already loaded.
+  const loadMoreOpenGames = useCallback(async () => {
+    const last = openGames[openGames.length - 1];
+    if (!last) return;
+    const next = await asyncApi.listOpenGames(last.createdAt);
+    if (!next.ok) return;
+    setOpenGames((cur) => [...cur, ...next.data.games.filter((g) => !cur.some((c) => c.id === g.id))]);
+    setOpenGamesHasMore(next.data.hasMore);
+  }, [openGames]);
 
   useEffect(() => {
     refreshGames();
@@ -634,6 +650,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentRoom,
         myGames,
         openGames,
+        openGamesHasMore,
+        loadMoreOpenGames,
         yourTurnCount,
         refreshGames,
         createAsyncGame,

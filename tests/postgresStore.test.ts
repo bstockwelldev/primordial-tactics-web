@@ -84,7 +84,9 @@ maybe('postgres: lists, cap count, timeout forfeit and cron sweep', async () => 
   // Earlier tests left running games in this database too, so only a lower bound is exact.
   const sweep = (await w.call('GET', '/cron/sweep', 's')).body;
   assert.ok(sweep.overdue >= 1 && sweep.settled === sweep.overdue, JSON.stringify(sweep));
-  assert.deepEqual((await w.call('GET', '/cron/sweep', 's')).body, { overdue: 0, settled: 0 });
+  const again = (await w.call('GET', '/cron/sweep', 's')).body;
+  assert.equal(again.overdue, 0);
+  assert.equal(again.settled, 0);
   const done = (await store.getGame(live))!;
   assert.equal(done.status, 'completed');
   assert.equal(done.endReason, 'forfeit');

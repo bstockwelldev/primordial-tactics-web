@@ -198,7 +198,13 @@ app.get('/api/roadmap', (req, res) => {
 app.use('/api', async (req, res) => {
   try {
     const result = await handle(
-      { method: req.method, path: req.path, headers: req.headers as Record<string, string | undefined>, body: req.body },
+      {
+        method: req.method,
+        path: req.path,
+        headers: req.headers as Record<string, string | undefined>,
+        body: req.body,
+        query: req.query as Record<string, string | undefined>,
+      },
       getDeps()
     );
     res.status(result.status).setHeader('Cache-Control', 'no-store').json(result.body);

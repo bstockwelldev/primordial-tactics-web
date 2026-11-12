@@ -8,7 +8,13 @@ export default async function handler(req: any, res: any) {
     const url = new URL(req.url || '/', 'http://localhost');
     const sub = url.searchParams.get('path') ?? url.pathname.replace(/^\/api/, '');
     const result = await handle(
-      { method: req.method || 'GET', path: `/${sub.replace(/^\/+/, '')}`, headers: req.headers || {}, body: req.body },
+      {
+        method: req.method || 'GET',
+        path: `/${sub.replace(/^\/+/, '')}`,
+        headers: req.headers || {},
+        body: req.body,
+        query: Object.fromEntries([...url.searchParams].filter(([k]) => k !== 'path')),
+      },
       getDeps()
     );
     res.status(result.status).setHeader('Cache-Control', 'no-store').json(result.body);

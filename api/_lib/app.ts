@@ -19,6 +19,9 @@ export const MAX_ACTIVE_GAMES = 10;
 const FINISHED_LIMIT = 20;
 const OPEN_LIMIT = 30;
 const SWEEP_LIMIT = 200;
+/** An open challenge nobody has taken for this long is dead: hidden, unjoinable, then deleted by the sweep. */
+export const OPEN_GAME_TTL_DAYS = 7;
+const OPEN_GAME_TTL_MS = OPEN_GAME_TTL_DAYS * 24 * 3600_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface ApiRequest {
@@ -27,6 +30,8 @@ export interface ApiRequest {
   path: string;
   headers: Record<string, string | undefined>;
   body?: any;
+  /** Parsed query string, when the adapter has one. */
+  query?: Record<string, string | undefined>;
 }
 
 export interface ApiResponse {
@@ -98,6 +103,10 @@ async function renameInUnfinishedGames(playerId: string, name: string, deps: Dep
   }
 }
 
+const openCutoff = (now: string) => new Date(new Date(now).getTime() - OPEN_GAME_TTL_MS).toISOString();
+const isExpiredChallenge = (g: AsyncGame, now: string) =>
+  g.status === 'waiting' && g.visibility === 'open' && g.createdAt < openCutoff(now);
+
 const isParticipant = (g: AsyncGame, playerId: string) => g.hostId === playerId || g.guestId === playerId;
 
 /** What a non-participant may see of a waiting game (invite preview / open list). */
@@ -143,7 +152,8 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
     const overdue = await deps.store.listOverdueGames(deps.now(), SWEEP_LIMIT);
     let settled = 0;
     for (const g of overdue) if ((await settle(g, deps)).version !== g.version) settled++;
-    return json(200, { overdue: overdue.length, settled });
+    const expired = await deps.store.deleteExpiredOpenGames(openCutoff(deps.now()), SWEEP_LIMIT);
+    return json(200, { overdue: overdue.length, settled, expired });
   }
 
   // ---- authenticated
@@ -179,8 +189,10 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
   }
 
   if (route === 'GET /games/open') {
-    const games = await deps.store.listOpenGames(me.id, OPEN_LIMIT);
-    return json(200, { games: games.map(summary) });
+    const before = typeof req.query?.before === 'string' && !Number.isNaN(Date.parse(req.query.before)) ? req.query.before : undefined;
+    // One extra row tells us whether another page exists.
+    const rows = await deps.store.listOpenGames(me.id, OPEN_LIMIT + 1, { before, createdAfter: openCutoff(deps.now()) });
+    return json(200, { games: rows.slice(0, OPEN_LIMIT).map(summary), hasMore: rows.length > OPEN_LIMIT });
   }
 
   if (route === 'POST /games') {
@@ -205,6 +217,7 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
       const game = await settle(loaded, deps);
       if (isParticipant(game, me.id)) return json(200, { game });
       // Anyone holding the link may preview a game that is still waiting for a challenger.
+      if (isExpiredChallenge(game, deps.now())) return fail(410, 'This challenge has expired.');
       if (game.status === 'waiting') return json(200, { game: summary(game), preview: true });
       return fail(403, 'You are not a player in this game.');
     }
@@ -213,6 +226,7 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
       if ((await deps.store.countActiveGames(me.id)) >= MAX_ACTIVE_GAMES) {
         return fail(409, `You already have ${MAX_ACTIVE_GAMES} active games.`);
       }
+      if (isExpiredChallenge(loaded, deps.now())) return fail(410, 'This challenge has expired.');
       const result = joinGame(loaded, me.id, me.name, deps.now());
       if (!result.ok) return fail(result.status, result.error);
       if (!(await deps.store.updateGame(result.game, loaded.version))) return fail(409, 'Someone else just joined this game.');
