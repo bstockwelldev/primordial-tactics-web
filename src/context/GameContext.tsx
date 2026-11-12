@@ -18,6 +18,7 @@ import {
 } from '../game/constants';
 import { canAfford, deductResources, applyEvolution } from '../game/rules';
 import { apiUrl } from '../lib/api';
+import { NEW_GAME_XP, levelForXp } from '../game/balance';
 import * as asyncApi from '../lib/asyncApi';
 import type { GameSummary } from '../lib/asyncApi';
 import type { AsyncGame, GameAction } from '../game/engine';
@@ -142,8 +143,11 @@ const INITIAL_DINOS: TamedDino[] = [
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [playerName, setPlayerName] = useState(() => localStorage.getItem('pt_player_name') || 'Survivor Rex');
-  const [playerLevel, setPlayerLevel] = useState(5);
-  const [playerXp, setPlayerXp] = useState(650);
+  const [playerXp, setPlayerXp] = useState(() => {
+    const saved = Number(localStorage.getItem('pt_player_xp'));
+    return Number.isFinite(saved) && saved > 0 ? saved : NEW_GAME_XP;
+  });
+  const playerLevel = levelForXp(playerXp);
   const [resources, setResources] = useState<PrehistoricResources>(() => {
     const saved = localStorage.getItem('pt_resources');
     return saved ? JSON.parse(saved) : INITIAL_RESOURCES;
@@ -188,11 +192,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Local storage sync
   useEffect(() => {
     localStorage.setItem('pt_player_name', playerName);
+    localStorage.setItem('pt_player_xp', String(playerXp));
     localStorage.setItem('pt_resources', JSON.stringify(resources));
     localStorage.setItem('pt_inventory', JSON.stringify(inventory));
     localStorage.setItem('pt_dinos', JSON.stringify(tamedDinos));
     localStorage.setItem('pt_campaign_sectors', JSON.stringify(campaignSectors));
-  }, [playerName, resources, inventory, tamedDinos, campaignSectors]);
+  }, [playerName, playerXp, resources, inventory, tamedDinos, campaignSectors]);
 
   // Register (or re-validate) this browser's player, then keep the games list fresh.
   const playerNameRef = useRef(playerName);
