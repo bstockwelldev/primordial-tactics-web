@@ -1,0 +1,16 @@
+{
+  "//": "Used when Vercel compiles the serverless function. Same settings as the root config, with no named type libraries: the function build cannot resolve them ('vite/client', 'node') and only transpiles. Full type-checking of api/ runs under the root config (bun run lint).",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": [],
+    "lib": ["ES2022", "DOM"],
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["./**/*.ts"]
+}

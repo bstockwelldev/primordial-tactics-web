@@ -27,6 +27,7 @@ export const MyGamesModal: React.FC = () => {
     setShowLobbyModal,
     myPlayerId,
     isConnected,
+    connectionError,
     myGames,
     openGames,
     refreshGames,
@@ -151,10 +152,11 @@ export const MyGamesModal: React.FC = () => {
         </div>
 
         <div className="p-4 sm:p-5 overflow-y-auto space-y-5">
-          {!isConnected && (
-            <p className="p-3 rounded-xl bg-red-950/40 border border-red-900/60 text-sm text-red-200">
-              Cannot reach the game server. Solo play still works; multiplayer games will appear when you are back online.
-            </p>
+          {!isConnected && connectionError && (
+            <div data-testid="connection-error" className="p-3 rounded-xl bg-red-950/40 border border-red-900/60 flex items-center justify-between gap-3">
+              <p className="text-sm text-red-200">{connectionError} Solo play still works.</p>
+              <button className={quietBtn} onClick={() => refreshGames()}>Retry</button>
+            </div>
           )}
           {message && (
             <p role="alert" className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-sm text-amber-100 break-words">

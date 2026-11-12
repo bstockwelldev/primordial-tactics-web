@@ -231,6 +231,40 @@ export const TacticalArenaView: React.FC = () => {
     }
   };
 
+  // Which abilities can actually be used here. Enemy-targeted ones are armed and then aimed
+  // at a unit; self abilities fire at once (PvP only — they have no effect in solo yet);
+  // ally abilities are not implemented in either mode.
+  const abilityUse = (ability: Ability): 'target' | 'self' | 'unavailable' =>
+    ability.targetType === 'enemy' || ability.targetType === 'tile'
+      ? 'target'
+      : ability.targetType === 'self' && currentRoom
+      ? 'self'
+      : 'unavailable';
+
+  const armedAbility = selectedUnit?.abilities.find((a) => a.id === selectedAbilityId) || null;
+  const enemiesInRange = (ability: Ability) =>
+    selectedUnit
+      ? activeUnits.filter(
+          (u) => !u.isPlayer && u.hp > 0 && calculateDistance(selectedUnit.x, selectedUnit.y, u.x, u.y) <= ability.range
+        ).length
+      : 0;
+
+  const handleAbilityButton = (ability: Ability) => {
+    if (!selectedUnit) return;
+    const use = abilityUse(ability);
+    if (use === 'self') {
+      act({ type: 'ability', unitId: selectedUnit.id, targetId: selectedUnit.id, abilityId: ability.id });
+      setSelectedAbilityId(null);
+    } else if (use === 'target') {
+      setSelectedAbilityId(selectedAbilityId === ability.id ? null : ability.id);
+    }
+  };
+
+  const notify = (text: string, ms = 2500) => {
+    setFloatingNotification(text);
+    setTimeout(() => setFloatingNotification(null), ms);
+  };
+
   // Execute Move action or unit selection
   const handleTileClick = (targetX: number, targetY: number) => {
     if (!isMyTurn || isMatchOver) return;
@@ -257,6 +291,13 @@ export const TacticalArenaView: React.FC = () => {
     // If clicked an enemy unit without an armed ability, inspect that enemy's dossier!
     if (clickedUnit && !clickedUnit.isPlayer) {
       setInspectedUnitOverrideId(clickedUnit.id);
+      if (selectedUnit?.isPlayer) notify('To attack: pick an attack above the grid, then tap the enemy.', 3500);
+      return;
+    }
+
+    // With an attack armed, an empty tile is a mis-tap, not a move order.
+    if (selectedAbilityId) {
+      notify('Tap a red-highlighted enemy to attack, or cancel the attack to move.');
       return;
     }
 
@@ -640,6 +681,57 @@ export const TacticalArenaView: React.FC = () => {
               </div>
             </div>
 
+            {/* Quick actions for the selected unit: attacks live right next to the board */}
+            {selectedUnit?.isPlayer && selectedUnit.hp > 0 && !isMatchOver && (
+              <div data-testid="quick-actions" className="mb-3 p-2.5 rounded-xl bg-stone-900/80 border border-stone-800 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-stone-300 mr-1">{selectedUnit.name.split(' (')[0]}:</span>
+                  {selectedUnit.abilities.map((ability) => {
+                    const use = abilityUse(ability);
+                    const affordable = selectedUnit.ap >= ability.apCost;
+                    const armed = selectedAbilityId === ability.id;
+                    const disabled = !isMyTurn || !affordable || use === 'unavailable';
+                    return (
+                      <button
+                        key={ability.id}
+                        onClick={() => handleAbilityButton(ability)}
+                        disabled={disabled}
+                        title={use === 'unavailable' ? 'Support abilities are not usable in this mode yet.' : ability.description}
+                        className={`min-h-11 px-3 rounded-lg text-xs font-bold border transition-colors ${
+                          armed
+                            ? 'bg-red-600 border-red-400 text-white ring-2 ring-red-400/50'
+                            : disabled
+                            ? 'bg-stone-950/40 border-stone-900 text-stone-600 cursor-not-allowed'
+                            : 'bg-stone-800 border-stone-600 text-stone-100 hover:border-red-400 cursor-pointer'
+                        }`}
+                      >
+                        {ability.name}
+                        <span className="ml-1.5 font-normal opacity-80">
+                          {ability.apCost} AP{use === 'target' ? ` · range ${ability.range}` : use === 'self' ? ' · self' : ' · unavailable'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {armedAbility && (
+                    <button onClick={() => setSelectedAbilityId(null)} className="min-h-11 px-3 rounded-lg text-xs font-semibold text-stone-300 border border-stone-700 hover:bg-stone-800 cursor-pointer">
+                      Cancel
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-stone-400">
+                  {!isMyTurn
+                    ? 'Waiting for the other side to finish their turn.'
+                    : armedAbility
+                    ? enemiesInRange(armedAbility) > 0
+                      ? `${armedAbility.name} armed — tap a red-highlighted enemy to attack.`
+                      : `${armedAbility.name} armed, but no enemy is within ${armedAbility.range} tile${armedAbility.range > 1 ? 's' : ''}. Cancel and move closer.`
+                    : selectedUnit.ap === 0
+                    ? 'This unit is out of AP. Select another unit or end your turn.'
+                    : 'Tap a green tile to move, or pick an attack and then tap an enemy.'}
+                </p>
+              </div>
+            )}
+
             {/* The 8x6 Tactical Grid */}
             <div className="min-w-[620px] max-w-2xl mx-auto grid grid-cols-8 gap-2 p-2.5 rounded-xl bg-stone-900/60 border border-stone-800/80 shadow-inner">
               {gridTiles.map((tile) => {
@@ -670,9 +762,19 @@ export const TacticalArenaView: React.FC = () => {
                   }
                 }
 
+                // Tiles the armed attack can reach (shown even when no enemy stands there)
+                const isInAttackRange =
+                  !!selectedUnit &&
+                  !!armedAbility &&
+                  tile.walkable &&
+                  !isSelected &&
+                  calculateDistance(selectedUnit.x, selectedUnit.y, tile.x, tile.y) <= armedAbility.range;
+                if (armedAbility) isReachable = false; // aiming: hide move highlights
+
                 return (
                   <div
                     key={`${tile.x}_${tile.y}`}
+                    data-targetable={isTargetable || undefined}
                     onClick={() => handleTileClick(tile.x, tile.y)}
                     onMouseEnter={() => setHoveredTile(tile)}
                     onMouseLeave={() => setHoveredTile(null)}
@@ -683,6 +785,8 @@ export const TacticalArenaView: React.FC = () => {
                         ? 'bg-amber-950/70 border-amber-400 ring-2 ring-amber-400 shadow-lg shadow-amber-950/60 scale-[1.02] z-10'
                         : isTargetable
                         ? 'bg-red-950/60 border-red-500 ring-2 ring-red-500 animate-pulse z-10'
+                        : isInAttackRange
+                        ? 'bg-red-950/25 border-red-900/70'
                         : isReachable
                         ? 'bg-emerald-950/50 border-emerald-500/70 hover:bg-emerald-900/60'
                         : isHovered
@@ -964,8 +1068,8 @@ export const TacticalArenaView: React.FC = () => {
                         onMouseLeave={() => setHoveredAbility(null)}
                       >
                         <button
-                          onClick={() => setSelectedAbilityId(isSelected ? null : ability.id)}
-                          disabled={!canAffordAp || !selectedUnit.isPlayer || !isMyTurn}
+                          onClick={() => handleAbilityButton(ability)}
+                          disabled={!canAffordAp || !selectedUnit.isPlayer || !isMyTurn || abilityUse(ability) === 'unavailable'}
                           className={`w-full p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between space-y-2 cursor-pointer shadow h-full ${
                             isSelected
                               ? 'bg-amber-950/80 border-amber-400 ring-2 ring-amber-400/40 text-amber-100'
