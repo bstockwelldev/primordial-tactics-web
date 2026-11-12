@@ -11,6 +11,11 @@ export interface PushSubscriptionRecord {
   keys: { p256dh: string; auth: string };
 }
 
+export interface OpenGamesQuery {
+  before?: string;
+  createdAfter?: string;
+}
+
 /** Persistence boundary. Two implementations: Supabase (production) and memory (dev/tests). */
 export interface Store {
   createPlayer(p: Player & { tokenHash: string }): Promise<void>;
@@ -26,7 +31,13 @@ export interface Store {
   updateGame(game: AsyncGame, expectedVersion: number): Promise<boolean>;
   /** Waiting + in-progress games, then the most recent finished ones. */
   listGamesForPlayer(playerId: string, finishedLimit: number): Promise<AsyncGame[]>;
-  listOpenGames(excludePlayerId: string, limit: number): Promise<AsyncGame[]>;
+  /**
+   * Open challenges, newest first. `before` pages by createdAt (exclusive); `createdAfter` hides
+   * challenges older than the expiry window (exclusive).
+   */
+  listOpenGames(excludePlayerId: string, limit: number, opts?: OpenGamesQuery): Promise<AsyncGame[]>;
+  /** Deletes unplayed open challenges created before `createdBefore`; returns how many went. */
+  deleteExpiredOpenGames(createdBefore: string, limit: number): Promise<number>;
   countActiveGames(playerId: string): Promise<number>;
   listOverdueGames(now: string, limit: number): Promise<AsyncGame[]>;
 
@@ -74,13 +85,22 @@ export class MemoryStore implements Store {
       ...mine.filter((g) => g.status === 'completed').sort(byRecent).slice(0, finishedLimit),
     ]);
   }
-  async listOpenGames(excludePlayerId: string, limit: number) {
+  async listOpenGames(excludePlayerId: string, limit: number, opts: OpenGamesQuery = {}) {
     return copy(
       [...this.games.values()]
         .filter((g) => g.status === 'waiting' && g.visibility === 'open' && g.hostId !== excludePlayerId)
+        .filter((g) => !opts.before || g.createdAt < opts.before)
+        .filter((g) => !opts.createdAfter || g.createdAt > opts.createdAfter)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, limit)
     );
+  }
+  async deleteExpiredOpenGames(createdBefore: string, limit: number) {
+    const expired = [...this.games.values()]
+      .filter((g) => g.status === 'waiting' && g.visibility === 'open' && g.createdAt < createdBefore)
+      .slice(0, limit);
+    for (const g of expired) this.games.delete(g.id);
+    return expired.length;
   }
   async countActiveGames(playerId: string) {
     return [...this.games.values()].filter(

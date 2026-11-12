@@ -67,7 +67,8 @@ export async function ensurePlayer(name: string): Promise<EnsureResult> {
 
 export const renamePlayer = (name: string) => request('PATCH', '/players/me', { name });
 export const listMyGames = () => request<{ games: GameSummary[] }>('GET', '/games');
-export const listOpenGames = () => request<{ games: GameSummary[] }>('GET', '/games/open');
+export const listOpenGames = (before?: string) =>
+  request<{ games: GameSummary[]; hasMore: boolean }>('GET', `/games/open${before ? `?before=${encodeURIComponent(before)}` : ''}`);
 export const createGame = (visibility: 'open' | 'invite', turnHours: number) =>
   request<{ game: AsyncGame }>('POST', '/games', { visibility, turnHours });
 export const joinGame = (id: string) => request<{ game: AsyncGame }>('POST', `/games/${id}/join`);
@@ -88,4 +89,13 @@ export function timeLeft(deadline: string | null, now = Date.now()): string {
   const d = Math.floor(h / 24);
   if (d >= 1) return `${d}d ${h % 24}h`;
   return h >= 1 ? `${h}h ${minutes % 60}m` : `${minutes}m`;
+}
+
+/** "just now", "5m ago", "3h ago", "2d ago". */
+export function timeAgo(iso: string, now = Date.now()): string {
+  const minutes = Math.floor((now - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
 }

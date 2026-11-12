@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { describeFailure, getGame, renamePlayer, timeLeft, GameSummary } from '../lib/asyncApi';
+import { describeFailure, getGame, renamePlayer, timeAgo, timeLeft, GameSummary } from '../lib/asyncApi';
 import { enablePush, getPushState, PushState } from '../lib/push';
 import { ISLAND_CAMPAIGN_SECTORS } from '../game/constants';
 import { SOLO_SAVE_KEY, SoloSave } from '../game/soloSave';
@@ -32,6 +32,8 @@ export const MyGamesModal: React.FC = () => {
     connectionError,
     myGames,
     openGames,
+    openGamesHasMore,
+    loadMoreOpenGames,
     refreshGames,
     createAsyncGame,
     joinAsyncGame,
@@ -325,11 +327,16 @@ export const MyGamesModal: React.FC = () => {
               <div key={g.id} className={row}>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-stone-100 truncate">{g.hostName}</p>
-                  <p className="text-xs text-stone-400">{g.turnHours}h per turn</p>
+                  <p className="text-xs text-stone-400">{g.turnHours}h per turn · posted {timeAgo(g.createdAt)}</p>
                 </div>
                 <button disabled={busy} className={primaryBtn} onClick={() => run(() => joinAsyncGame(g.id))}>Join</button>
               </div>
             ))}
+            {openGamesHasMore && (
+              <button disabled={busy} className={quietBtn} onClick={() => run(async () => (await loadMoreOpenGames(), null))}>
+                Show more
+              </button>
+            )}
           </Section>
 
           <Section title="Finished" icon={<Trophy className="w-3.5 h-3.5 text-stone-400" />} count={finished.length}>

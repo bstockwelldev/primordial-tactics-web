@@ -1,6 +1,6 @@
 import postgres from 'postgres';
 import type { AsyncGame } from '../../src/game/engine.js';
-import type { Player, PushSubscriptionRecord, Store } from './store.js';
+import type { OpenGamesQuery, Player, PushSubscriptionRecord, Store } from './store.js';
 
 // Supabase Postgres over a direct (pooled) connection. Schema: supabase/migrations.
 
@@ -112,11 +112,24 @@ export class PostgresStore implements Store {
       order by updated_at desc limit ${finishedLimit}`;
     return [...active, ...finished].map(fromRow);
   }
-  async listOpenGames(excludePlayerId: string, limit: number) {
+  async listOpenGames(excludePlayerId: string, limit: number, opts: OpenGamesQuery = {}) {
     const rows = await this.sql<GameRow[]>`
-      select * from games where status = 'waiting' and visibility = 'open' and host_id <> ${excludePlayerId}
+      select * from games
+      where status = 'waiting' and visibility = 'open' and host_id <> ${excludePlayerId}
+        and (${opts.before ?? null}::timestamptz is null or created_at < ${opts.before ?? null}::timestamptz)
+        and (${opts.createdAfter ?? null}::timestamptz is null or created_at > ${opts.createdAfter ?? null}::timestamptz)
       order by created_at desc limit ${limit}`;
     return rows.map(fromRow);
+  }
+  async deleteExpiredOpenGames(createdBefore: string, limit: number) {
+    const rows = await this.sql<Array<{ id: string }>>`
+      delete from games
+      where id in (
+        select id from games
+        where status = 'waiting' and visibility = 'open' and created_at < ${createdBefore}::timestamptz
+        limit ${limit})
+      returning id`;
+    return rows.length;
   }
   async countActiveGames(playerId: string) {
     const rows = await this.sql<Array<{ n: number }>>`

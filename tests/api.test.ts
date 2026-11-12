@@ -15,8 +15,8 @@ function world() {
     cronSecret: 'cron-secret',
     notifier: { notify: async (events) => void sent.push(...events) },
   };
-  const call = (method: string, path: string, token?: string, body?: any) =>
-    handle({ method, path, headers: token ? { authorization: `Bearer ${token}` } : {}, body }, deps) as Promise<{ status: number; body: any }>;
+  const call = (method: string, path: string, token?: string, body?: any, query?: Record<string, string>) =>
+    handle({ method, path, headers: token ? { authorization: `Bearer ${token}` } : {}, body, query }, deps) as Promise<{ status: number; body: any }>;
   const player = async (name: string) => (await call('POST', '/players', undefined, { name })).body as { playerId: string; token: string };
   const advance = (hours: number) => (clock.t += hours * 3600_000);
   return { store, deps, call, player, advance, sent };
@@ -145,9 +145,9 @@ test('cron sweep settles games nobody opened, and needs the secret', async () =>
   assert.equal((await w.call('GET', '/cron/sweep')).status, 401);
   assert.equal((await w.call('GET', '/cron/sweep', 'wrong')).status, 401);
   const sweep = await w.call('GET', '/cron/sweep', 'cron-secret');
-  assert.deepEqual(sweep.body, { overdue: 1, settled: 1 });
+  assert.deepEqual(sweep.body, { overdue: 1, settled: 1, expired: 0 });
   assert.equal((await w.store.getGame(id))!.status, 'completed');
-  assert.deepEqual((await w.call('GET', '/cron/sweep', 'cron-secret')).body, { overdue: 0, settled: 0 });
+  assert.deepEqual((await w.call('GET', '/cron/sweep', 'cron-secret')).body, { overdue: 0, settled: 0, expired: 0 });
 });
 
 test('active game cap and turn-length validation', async () => {
@@ -191,4 +191,39 @@ test('renaming a player updates the name on waiting and in-progress games, not f
   assert.equal((await w.store.getGame(playingId))!.guestName, 'Hana the Bold');
 
   assert.equal((await w.call('PATCH', '/players/me', hana.token, { name: '   ' })).status, 400);
+});
+
+test('open challenges: paged newest first, expire after 7 days, invite links do not expire', async () => {
+  const w = world();
+  const host = await w.player('Hana');
+  const viewer = await w.player('Gus');
+  const hosts = [host, ...(await Promise.all(Array.from({ length: 34 }, (_, i) => w.player(`Host ${i}`))))];
+  const ids: string[] = [];
+  for (const h of hosts) {
+    ids.push((await w.call('POST', '/games', h.token, { visibility: 'open' })).body.game.id);
+    w.advance(0.01); // distinct createdAt values
+  }
+  const invite = (await w.call('POST', '/games', host.token, { visibility: 'invite' })).body.game.id;
+
+  const first = (await w.call('GET', '/games/open', viewer.token)).body;
+  assert.equal(first.games.length, 30);
+  assert.equal(first.hasMore, true);
+  assert.equal(first.games[0].id, ids[ids.length - 1], 'newest first');
+  const second = (await w.call('GET', '/games/open', viewer.token, undefined, { before: first.games[29].createdAt })).body;
+  assert.equal(second.games.length, 5);
+  assert.equal(second.hasMore, false);
+  assert.equal(new Set([...first.games, ...second.games].map((g: any) => g.id)).size, 35, 'no overlap, none missing');
+  assert.equal((await w.call('GET', '/games/open', viewer.token, undefined, { before: 'not a date' })).body.games.length, 30, 'bad cursor ignored');
+
+  w.advance(24 * 7 + 1);
+  assert.equal((await w.call('GET', '/games/open', viewer.token)).body.games.length, 0, 'expired challenges are hidden');
+  assert.equal((await w.call('POST', `/games/${ids[0]}/join`, viewer.token)).status, 410, 'and cannot be joined');
+  assert.equal((await w.call('GET', `/games/${ids[0]}`, viewer.token)).status, 410, 'or previewed');
+  assert.equal((await w.call('GET', `/games/${ids[0]}`, host.token)).status, 200, 'the host still sees their own');
+  assert.equal((await w.call('POST', `/games/${invite}/join`, viewer.token)).status, 200, 'invite links stay valid');
+
+  const sweep = (await w.call('GET', '/cron/sweep', 'cron-secret')).body;
+  assert.equal(sweep.expired, 35);
+  assert.equal(await w.store.getGame(ids[0]), null, 'the sweep deletes them');
+  assert.ok(await w.store.getGame(invite), 'but never an invite game or one in play');
 });
