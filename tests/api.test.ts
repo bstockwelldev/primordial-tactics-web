@@ -166,3 +166,29 @@ test('push subscriptions are validated and stored per player', async () => {
   assert.equal((await w.call('POST', '/push/subscribe', hana.token, good)).status, 201);
   assert.equal((await w.store.listPushSubscriptions(hana.playerId)).length, 1);
 });
+
+test('renaming a player updates the name on waiting and in-progress games, not finished ones', async () => {
+  const w = world();
+  const hana = await w.player('Hana');
+  const gus = await w.player('Gus');
+
+  const waitingId = (await w.call('POST', '/games', hana.token, { visibility: 'open' })).body.game.id;
+  const playingId = (await w.call('POST', '/games', gus.token, { visibility: 'open' })).body.game.id;
+  assert.equal((await w.call('POST', `/games/${playingId}/join`, hana.token)).status, 200);
+
+  assert.equal((await w.call('PATCH', '/players/me', hana.token, { name: '  Hana the Bold ' })).body.name, 'Hana the Bold');
+
+  const waiting = (await w.call('GET', `/games/${waitingId}`, hana.token)).body.game;
+  assert.equal(waiting.hostName, 'Hana the Bold');
+  const playing = (await w.call('GET', `/games/${playingId}`, gus.token)).body.game;
+  assert.equal(playing.guestName, 'Hana the Bold');
+  assert.equal(playing.hostName, 'Gus', 'the other player keeps their name');
+
+  // Finished games keep the name they were played under.
+  const finished = (await w.store.getGame(playingId))!;
+  await w.store.updateGame({ ...finished, status: 'completed' }, finished.version);
+  assert.equal((await w.call('PATCH', '/players/me', hana.token, { name: 'Hana III' })).status, 200);
+  assert.equal((await w.store.getGame(playingId))!.guestName, 'Hana the Bold');
+
+  assert.equal((await w.call('PATCH', '/players/me', hana.token, { name: '   ' })).status, 400);
+});

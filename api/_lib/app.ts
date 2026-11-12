@@ -84,6 +84,20 @@ async function emit(events: GameEvent[], game: AsyncGame, deps: Deps) {
   }
 }
 
+/**
+ * Game records carry a snapshot of each player's name, so a rename would otherwise leave the old name
+ * on every waiting and in-progress game. Finished games keep the name they were played under.
+ * Best effort: a game someone else is writing right now simply keeps the old name until its next write.
+ */
+async function renameInUnfinishedGames(playerId: string, name: string, deps: Deps) {
+  const games = await deps.store.listGamesForPlayer(playerId, 0);
+  for (const g of games) {
+    if (g.status === 'completed') continue;
+    const next = { ...g, hostName: g.hostId === playerId ? name : g.hostName, guestName: g.guestId === playerId ? name : g.guestName };
+    await deps.store.updateGame(next, g.version).catch(() => false);
+  }
+}
+
 const isParticipant = (g: AsyncGame, playerId: string) => g.hostId === playerId || g.guestId === playerId;
 
 /** What a non-participant may see of a waiting game (invite preview / open list). */
@@ -141,6 +155,7 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
     const name = cleanName(body.name);
     if (!name) return fail(400, 'A player name is required.');
     await deps.store.renamePlayer(me.id, name);
+    await renameInUnfinishedGames(me.id, name, deps);
     return json(200, { playerId: me.id, name });
   }
 

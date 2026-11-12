@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { getGame, timeLeft, GameSummary } from '../lib/asyncApi';
+import { describeFailure, getGame, renamePlayer, timeLeft, GameSummary } from '../lib/asyncApi';
 import { enablePush, getPushState, PushState } from '../lib/push';
 import { ISLAND_CAMPAIGN_SECTORS } from '../game/constants';
 import { SOLO_SAVE_KEY, SoloSave } from '../game/soloSave';
@@ -25,6 +25,8 @@ export const MyGamesModal: React.FC = () => {
   const {
     showLobbyModal,
     setShowLobbyModal,
+    playerName,
+    setPlayerName,
     myPlayerId,
     isConnected,
     connectionError,
@@ -51,10 +53,12 @@ export const MyGamesModal: React.FC = () => {
   const [invite, setInvite] = useState<GameSummary | null>(null);
   const [push, setPush] = useState<PushState>('off');
   const [soloSave, setSoloSave] = useState<SoloSave | null>(null);
+  const [nameDraft, setNameDraft] = useState(playerName);
 
   useEffect(() => {
     if (!showLobbyModal) return;
     setMessage(null);
+    setNameDraft(playerName);
     refreshGames();
     getPushState().then(setPush);
     try {
@@ -85,6 +89,23 @@ export const MyGamesModal: React.FC = () => {
   const run = async (fn: () => Promise<string | null>) => {
     setBusy(true);
     setMessage(await fn());
+    setBusy(false);
+  };
+
+  const cleanDraft = nameDraft.replace(/\p{Cc}/gu, '').trim();
+  const nameChanged = cleanDraft.length > 0 && cleanDraft !== playerName;
+
+  const saveName = async () => {
+    if (!nameChanged) return;
+    setBusy(true);
+    setPlayerName(cleanDraft);
+    if (!myPlayerId) {
+      setMessage('Name saved on this device. It will be used in games once you are connected.');
+    } else {
+      const res = await renamePlayer(cleanDraft);
+      setMessage(res.ok ? `Your name is now ${cleanDraft}.` : describeFailure(res));
+      if (res.ok) refreshGames();
+    }
     setBusy(false);
   };
 
@@ -158,6 +179,27 @@ export const MyGamesModal: React.FC = () => {
               <button className={quietBtn} onClick={() => refreshGames()}>Retry</button>
             </div>
           )}
+          <form
+            className="flex flex-col sm:flex-row sm:items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveName();
+            }}
+          >
+            <label className="flex-1 space-y-1 text-xs font-bold uppercase tracking-wider text-stone-400">
+              Your name
+              <input
+                data-testid="player-name-input"
+                value={nameDraft}
+                maxLength={40}
+                onChange={(e) => setNameDraft(e.target.value)}
+                className="block w-full min-h-11 px-3 rounded-lg bg-stone-800 border border-stone-700 text-sm font-normal normal-case tracking-normal text-stone-100"
+              />
+            </label>
+            <button type="submit" disabled={busy || !nameChanged} className={primaryBtn}>
+              Save name
+            </button>
+          </form>
           {message && (
             <p role="alert" className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-sm text-amber-100 break-words">
               {message}
