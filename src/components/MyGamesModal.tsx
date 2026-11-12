@@ -3,7 +3,7 @@ import { useGame } from '../context/GameContext';
 import { describeFailure, getGame, renamePlayer, timeAgo, timeLeft, GameSummary } from '../lib/asyncApi';
 import { enablePush, getPushState, PushState } from '../lib/push';
 import { ISLAND_CAMPAIGN_SECTORS } from '../game/constants';
-import { SOLO_SAVE_KEY, SoloSave } from '../game/soloSave';
+import { SOLO_SAVE_KEY, SoloSave, readSoloSave } from '../game/soloSave';
 import { Users, X, Swords, Bell, Link2, Hourglass, Trophy, Plus, Cpu, Lock } from 'lucide-react';
 
 const TURN_OPTIONS = [
@@ -70,7 +70,7 @@ export const MyGamesModal: React.FC = () => {
     refreshGames();
     getPushState().then(setPush);
     try {
-      setSoloSave(JSON.parse(localStorage.getItem(SOLO_SAVE_KEY) || 'null'));
+      setSoloSave(readSoloSave(localStorage.getItem(SOLO_SAVE_KEY)));
     } catch {
       setSoloSave(null);
     }
@@ -317,15 +317,19 @@ export const MyGamesModal: React.FC = () => {
           </Section>
 
           {soloSave && (
-            <Section title="Solo (this device)" icon={<Cpu className="w-3.5 h-3.5 text-violet-400" />} count={1}>
+            <Section title="Solo & co-op (this device)" icon={<Cpu className="w-3.5 h-3.5 text-violet-400" />} count={1}>
               <div className={row}>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-stone-100 truncate">
+                    {soloSave.party ? 'Co-op: ' : ''}
                     {soloSave.sectorId
                       ? `Campaign: ${ISLAND_CAMPAIGN_SECTORS.find((s) => s.id === soloSave.sectorId)?.sectorName || 'mission'}`
                       : 'Skirmish vs AI'}
                   </p>
-                  <p className="text-xs text-stone-400">Turn {soloSave.turn} · saved on this device</p>
+                  <p className="text-xs text-stone-400">
+                    Turn {soloSave.turn}
+                    {soloSave.party && soloSave.isPlayerTurn ? ` · ${soloSave.party.names[soloSave.party.slot]}'s turn` : ''} · saved on this device
+                  </p>
                 </div>
                 <button className={quietBtn} onClick={resumeSolo}>Resume</button>
               </div>

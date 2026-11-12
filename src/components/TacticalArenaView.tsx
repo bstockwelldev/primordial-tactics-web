@@ -20,8 +20,9 @@ import { buildArenaGrid, buildSoloUnits } from '../game/arenaSetup';
 import { createRng, newSeed } from '../game/rng';
 import type { GameAction } from '../game/engine';
 import { timeLeft } from '../lib/asyncApi';
-import { SOLO_SAVE_KEY, SoloSave } from '../game/soloSave';
-import { PartyPhase, Slot, canControl, controllerOf, firstPhase, nextPhase } from '../game/party';
+import { SOLO_SAVE_KEY, SoloSave, readSoloSave } from '../game/soloSave';
+import { PartyPhase, Slot, canControl, controllerOf, firstPhase, handoffNeeded, nextPhase } from '../game/party';
+import { HandoffOverlay } from './HandoffOverlay';
 import { PartySetupModal } from './PartySetupModal';
 import {
   DINOSAUR_SPECIES,
@@ -97,6 +98,8 @@ export const TacticalArenaView: React.FC = () => {
   const partyRef = useRef(party);
   partyRef.current = party;
   const [showPartySetup, setShowPartySetup] = useState(false);
+  // Pass & play: the player the device is being handed to (overlay up until they press Ready).
+  const [handoffTo, setHandoffTo] = useState<Slot | null>(null);
   const soloUnitsRef = useRef(soloUnits);
   soloUnitsRef.current = soloUnits;
   const soloTurnRef = useRef(soloTurn);
@@ -130,6 +133,7 @@ export const TacticalArenaView: React.FC = () => {
     setSoloTurn(1);
     setSoloIsPlayerTurn(true);
     setParty(null);
+    setHandoffTo(null);
     const seed = newSeed();
     soloRngRef.current = createRng(seed);
 
@@ -150,11 +154,12 @@ export const TacticalArenaView: React.FC = () => {
 
   // Restores the saved solo match for this mode (same sector, or skirmish), if there is one.
   const restoreSoloMatch = (): boolean => {
-    let save: SoloSave | null = null;
+    let raw: string | null = null;
     try {
-      save = JSON.parse(localStorage.getItem(SOLO_SAVE_KEY) || 'null');
+      raw = localStorage.getItem(SOLO_SAVE_KEY);
     } catch {}
-    if (!save || !Array.isArray(save.units) || save.sectorId !== (activeSectorMission?.id ?? null)) return false;
+    const save = readSoloSave(raw);
+    if (!save || save.sectorId !== (activeSectorMission?.id ?? null)) return false;
     setIsSoloMode(true);
     setSelectedUnitId('player_hero');
     setSelectedAbilityId(null);
@@ -170,6 +175,8 @@ export const TacticalArenaView: React.FC = () => {
     setParty(save.party ?? null);
     partyRef.current = save.party ?? null;
     if (save.party) setSelectedUnitId(firstUnitOf(save.units, save.party.slot));
+    // Whoever picks the device up after a reload has to confirm it is the right player.
+    setHandoffTo(save.party && save.isPlayerTurn ? save.party.slot : null);
     if (!save.isPlayerTurn) setTimeout(() => runAiTurn(), 800); // closed mid enemy turn: let it finish
     return true;
   };
@@ -496,6 +503,7 @@ export const TacticalArenaView: React.FC = () => {
       // Pass & play: this player is done; the other one goes before the rival clan does.
       const next = nextPhase(soloUnits, soloPhase).phase as Slot;
       setParty({ ...party, slot: next });
+      if (handoffNeeded(soloUnits, next)) setHandoffTo(next);
       setSelectedUnitId(firstUnitOf(soloUnits, next));
       setSelectedAbilityId(null);
       setInspectedUnitOverrideId(null);
@@ -539,6 +547,7 @@ export const TacticalArenaView: React.FC = () => {
         const phase = firstPhase(result.units);
         const slot: Slot = phase === 'enemy' ? 0 : phase;
         setParty({ ...current, slot });
+        if (phase !== 'enemy' && handoffNeeded(result.units, slot)) setHandoffTo(slot);
         setSelectedUnitId(firstUnitOf(result.units, slot));
         setSelectedAbilityId(null);
       }
@@ -694,6 +703,16 @@ export const TacticalArenaView: React.FC = () => {
           )}
           <span className="text-xs font-normal opacity-60 ml-auto">Round {currentTurnNumber}</span>
         </div>
+      )}
+
+      {party && handoffTo !== null && !isMatchOver && (
+        <HandoffOverlay
+          name={party.names[handoffTo]}
+          slot={handoffTo}
+          round={currentTurnNumber}
+          units={activeUnits.filter((u) => canControl(u, handoffTo)).map((u) => u.name.split(' (')[0])}
+          onReady={() => setHandoffTo(null)}
+        />
       )}
 
       {showPartySetup && (
