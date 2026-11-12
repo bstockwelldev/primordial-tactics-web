@@ -1,0 +1,17 @@
+{
+  "//": "Used when Vercel compiles the serverless function. Same settings as the root config, minus the browser-only 'vite/client' types, which are not resolvable in the function build.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "lib": ["ES2022", "DOM"],
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["./**/*.ts", "../src/game/**/*.ts", "../src/types/**/*.ts"],
+  "exclude": ["../src/game/**/*.test.ts"]
+}
