@@ -5,6 +5,7 @@ import {
   canUnitMoveTo,
   calculateDamage,
   calculateTorporDamage,
+  dartTorporGain,
   isTamingViable,
   calculateTamingChance,
   canEvolveDino,
@@ -212,4 +213,12 @@ test('GDD class passives alter combat calculations correctly', () => {
   const hulkDefenseDmg = calculateDamage(60, 20, 1.0, false, 0, undefined, 'Hulk', noCrit);
   const standardDefenseDmg = calculateDamage(60, 20, 1.0, false, 0, undefined, undefined, noCrit);
   assert.ok(hulkDefenseDmg.damage <= standardDefenseDmg.damage);
+});
+
+test('dartTorporGain: 35-54 base, reduced by the wild dino defense, never below the minimum', () => {
+  assert.equal(dartTorporGain(0, 0), 35);
+  assert.equal(dartTorporGain(0.999, 0), 54);
+  assert.equal(dartTorporGain(0, 38), calculateTorporDamage(35, 38));
+  assert.ok(dartTorporGain(0.5, 38) < dartTorporGain(0.5, 0), 'armoured dinos take less torpor');
+  assert.equal(dartTorporGain(5, 0), 54, 'out-of-range rolls are clamped');
 });

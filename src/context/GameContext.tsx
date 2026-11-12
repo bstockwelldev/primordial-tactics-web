@@ -85,6 +85,8 @@ interface GameContextType {
   // Actions
   addResources: (res: Partial<PrehistoricResources>) => void;
   craftItem: (recipeId: string) => boolean;
+  /** Spends one of an inventory item through React state; false if none is left. */
+  consumeItem: (itemId: string) => boolean;
   upgradeBuilding: (buildingId: string) => boolean;
   tameCreature: (speciesId: DinosaurSpeciesId, customName: string) => boolean;
   evolveCreature: (dinoInstanceId: string, branchId: EvolutionBranchId) => boolean;
@@ -363,6 +365,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  const consumeItem = (itemId: string): boolean => {
+    if ((inventory[itemId] || 0) <= 0) return false;
+    setInventory((prev) => ({ ...prev, [itemId]: Math.max(0, (prev[itemId] || 0) - 1) }));
+    return true;
+  };
+
   const craftItem = (recipeId: string): boolean => {
     const recipe = CRAFTING_RECIPES.find((r) => r.id === recipeId);
     if (!recipe) return false;
@@ -601,6 +609,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         playerXp,
         resources,
         inventory,
+        consumeItem,
         tamedDinos,
         baseBuildings,
         activeScreen,

@@ -114,6 +114,15 @@ export function calculateDamage(
 }
 
 /**
+ * Torpor one tranq dart adds to a wild dinosaur. `roll` is a uniform [0,1) draw giving a base
+ * of 35-54; the wild dino's defense then reduces it like any other torpor hit.
+ */
+export function dartTorporGain(roll: number, wildDefense: number): number {
+  const base = 35 + Math.floor(Math.min(Math.max(roll, 0), 0.999999) * 20);
+  return calculateTorporDamage(base, wildDefense);
+}
+
+/**
  * Calculates torpor build-up on a target dinosaur, applying Crush class torpor amplification
  */
 export function calculateTorporDamage(
