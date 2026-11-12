@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import { useGame } from '../context/GameContext';
 import {
@@ -21,6 +21,8 @@ import { createRng, newSeed } from '../game/rng';
 import type { GameAction } from '../game/engine';
 import { timeLeft } from '../lib/asyncApi';
 import { SOLO_SAVE_KEY, SoloSave } from '../game/soloSave';
+import { PartyPhase, Slot, canControl, controllerOf, firstPhase, nextPhase } from '../game/party';
+import { PartySetupModal } from './PartySetupModal';
 import {
   DINOSAUR_SPECIES,
   UNIT_PORTRAITS,
@@ -90,6 +92,11 @@ export const TacticalArenaView: React.FC = () => {
   const [soloIsPlayerTurn, setSoloIsPlayerTurn] = useState<boolean>(true);
   const [soloLogs, setSoloLogs] = useState<BattleActionLog[]>([]);
   const [soloWinner, setSoloWinner] = useState<string | null>(null);
+  // Pass & play: both humans' names and whose phase it is (null in a normal solo match).
+  const [party, setParty] = useState<{ names: [string, string]; slot: Slot } | null>(null);
+  const partyRef = useRef(party);
+  partyRef.current = party;
+  const [showPartySetup, setShowPartySetup] = useState(false);
   const soloUnitsRef = useRef(soloUnits);
   soloUnitsRef.current = soloUnits;
   const soloTurnRef = useRef(soloTurn);
@@ -107,6 +114,12 @@ export const TacticalArenaView: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const [floatingNotification, setFloatingNotification] = useState<string | null>(null);
 
+  // The human side with a buddy and the default split, for the party setup screen.
+  const buildPartyUnits = useCallback(
+    (guestName: string) => buildSoloUnits(playerName, tamedDinos, activeSectorMission, playerLevel, { guestName }),
+    [playerName, tamedDinos, activeSectorMission, playerLevel]
+  );
+
   // Initialize Solo Match
   const initSoloMatch = () => {
     setIsSoloMode(true);
@@ -116,6 +129,7 @@ export const TacticalArenaView: React.FC = () => {
     setSoloWinner(null);
     setSoloTurn(1);
     setSoloIsPlayerTurn(true);
+    setParty(null);
     const seed = newSeed();
     soloRngRef.current = createRng(seed);
 
@@ -153,6 +167,9 @@ export const TacticalArenaView: React.FC = () => {
     setSoloUnits(save.units);
     setSoloLogs(save.logs);
     setSoloIsPlayerTurn(save.isPlayerTurn);
+    setParty(save.party ?? null);
+    partyRef.current = save.party ?? null;
+    if (save.party) setSelectedUnitId(firstUnitOf(save.units, save.party.slot));
     if (!save.isPlayerTurn) setTimeout(() => runAiTurn(), 800); // closed mid enemy turn: let it finish
     return true;
   };
@@ -179,9 +196,10 @@ export const TacticalArenaView: React.FC = () => {
       logs: soloLogs.slice(-100),
       turn: soloTurn,
       isPlayerTurn: soloIsPlayerTurn,
+      ...(party ? { party } : {}),
     };
     localStorage.setItem(SOLO_SAVE_KEY, JSON.stringify(save));
-  }, [hasRoom, isSoloMode, soloUnits, soloLogs, soloTurn, soloIsPlayerTurn, soloWinner]);
+  }, [hasRoom, isSoloMode, soloUnits, soloLogs, soloTurn, soloIsPlayerTurn, soloWinner, party]);
 
   // Derived Active Match State
   const activeUnits = currentRoom ? currentRoom.units : soloUnits;
@@ -192,6 +210,15 @@ export const TacticalArenaView: React.FC = () => {
     : soloIsPlayerTurn;
   const isMatchOver = currentRoom ? currentRoom.status === 'completed' : !!soloWinner;
   const winnerId = currentRoom ? currentRoom.winnerId : soloWinner;
+
+  // Whose phase is it in a solo match: a human slot, or the bots. Outside pass & play this is slot 0.
+  const soloPhase: PartyPhase = soloIsPlayerTurn ? party?.slot ?? 0 : 'enemy';
+  /** May the player in front of the device command this unit now? (Online rooms keep the old side check.) */
+  const commands = (unit: UnitEntity) => (currentRoom ? unit.isPlayer : canControl(unit, soloPhase));
+  const ownerName = (unit: UnitEntity) => (party ? party.names[controllerOf(unit)] : playerName);
+  const toneOf = (unit: UnitEntity) => (party && unit.isPlayer && controllerOf(unit) === 1 ? 'sky' : 'emerald');
+  const firstUnitOf = (units: UnitEntity[], phase: PartyPhase) => units.find((u) => canControl(u, phase))?.id ?? null;
+  const canOfferBuddy = !currentRoom && !party && !isMatchOver && soloIsPlayerTurn && soloTurn === 1 && soloLogs.length <= 1;
 
   const [inspectedUnitOverrideId, setInspectedUnitOverrideId] = useState<string | null>(null);
 
@@ -280,6 +307,12 @@ export const TacticalArenaView: React.FC = () => {
     );
 
     // If clicked a friendly unit, select it!
+    if (clickedUnit && clickedUnit.isPlayer && !commands(clickedUnit)) {
+      // The other player's unit: look, don't touch.
+      setInspectedUnitOverrideId(clickedUnit.id);
+      notify(`That unit is ${ownerName(clickedUnit)}'s. Wait for their turn.`, 2500);
+      return;
+    }
     if (clickedUnit && clickedUnit.isPlayer) {
       setSelectedUnitId(clickedUnit.id);
       setInspectedUnitOverrideId(null);
@@ -309,6 +342,7 @@ export const TacticalArenaView: React.FC = () => {
     setInspectedUnitOverrideId(null);
 
     if (!selectedUnit || selectedUnit.hp <= 0) return;
+    if (!currentRoom && !commands(selectedUnit)) return;
 
     // Otherwise, attempt movement
     if (currentRoom) {
@@ -360,6 +394,7 @@ export const TacticalArenaView: React.FC = () => {
 
     const ability = actor.abilities.find((a) => a.id === abilityId);
     if (!ability) return;
+    if (!currentRoom && !commands(actor)) return;
 
     if (actor.ap < ability.apCost) {
       setFloatingNotification('Insufficient Action Points (AP)!');
@@ -457,6 +492,14 @@ export const TacticalArenaView: React.FC = () => {
 
     if (currentRoom) {
       act({ type: 'end_turn' });
+    } else if (party && soloPhase !== 'enemy' && nextPhase(soloUnits, soloPhase).phase !== 'enemy') {
+      // Pass & play: this player is done; the other one goes before the rival clan does.
+      const next = nextPhase(soloUnits, soloPhase).phase as Slot;
+      setParty({ ...party, slot: next });
+      setSelectedUnitId(firstUnitOf(soloUnits, next));
+      setSelectedAbilityId(null);
+      setInspectedUnitOverrideId(null);
+      setHoveredTile(null);
     } else {
       // End player turn in solo mode, simulate AI turn
       setSoloIsPlayerTurn(false);
@@ -491,6 +534,14 @@ export const TacticalArenaView: React.FC = () => {
       setSoloWinner(check.winnerPlayerId || 'enemy_bot');
     } else {
       setSoloIsPlayerTurn(true);
+      const current = partyRef.current;
+      if (current) {
+        const phase = firstPhase(result.units);
+        const slot: Slot = phase === 'enemy' ? 0 : phase;
+        setParty({ ...current, slot });
+        setSelectedUnitId(firstUnitOf(result.units, slot));
+        setSelectedAbilityId(null);
+      }
     }
   };
 
@@ -533,7 +584,7 @@ export const TacticalArenaView: React.FC = () => {
                 {currentRoom ? currentRoom.name : 'Tactical Proving Grounds'}
               </h2>
               <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-stone-800 text-amber-300 border border-stone-700">
-                {currentRoom ? 'Async PvP' : 'Solo AI Skirmish'}
+                {currentRoom ? 'Async PvP' : party ? 'Co-op vs AI' : 'Solo AI Skirmish'}
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs text-stone-400 mt-0.5">
@@ -554,6 +605,16 @@ export const TacticalArenaView: React.FC = () => {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          {canOfferBuddy && (
+            <button
+              data-testid="play-with-buddy"
+              onClick={() => setShowPartySetup(true)}
+              className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-700 hover:bg-sky-600 text-white shadow cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Play with a buddy</span>
+            </button>
+          )}
           {!currentRoom ? (
             <button
               onClick={() => setShowLobbyModal(true)}
@@ -602,7 +663,7 @@ export const TacticalArenaView: React.FC = () => {
                 : 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
             }`}
           >
-            End Turn & Shift Initiative
+            {party && soloPhase !== 'enemy' && !isMatchOver ? `End ${party.names[soloPhase]}'s turn` : 'End Turn & Shift Initiative'}
           </button>
         </div>
       </div>
@@ -612,6 +673,58 @@ export const TacticalArenaView: React.FC = () => {
           <AlertTriangle className="w-4 h-4 text-red-400" />
           <span>{floatingNotification}</span>
         </div>
+      )}
+
+      {party && !isMatchOver && (
+        <div
+          data-testid="party-banner"
+          className={`p-3 rounded-xl border text-sm font-bold flex flex-wrap items-center gap-x-3 gap-y-1 ${
+            soloPhase === 'enemy'
+              ? 'bg-red-950/50 border-red-800/60 text-red-200'
+              : soloPhase === 1
+              ? 'bg-sky-950/60 border-sky-700/60 text-sky-100'
+              : 'bg-emerald-950/50 border-emerald-700/60 text-emerald-100'
+          }`}
+        >
+          <span>{soloPhase === 'enemy' ? 'The rival clan is moving…' : `${party.names[soloPhase]}'s turn`}</span>
+          {soloPhase !== 'enemy' && (
+            <span className="text-xs font-normal opacity-80">
+              {activeUnits.filter((u) => canControl(u, soloPhase)).map((u) => u.name.split(' (')[0]).join(', ')}
+            </span>
+          )}
+          <span className="text-xs font-normal opacity-60 ml-auto">Round {currentTurnNumber}</span>
+        </div>
+      )}
+
+      {showPartySetup && (
+        <PartySetupModal
+          hostName={playerName}
+          buildUnits={buildPartyUnits}
+          portrait={getUnitPortrait}
+          onCancel={() => setShowPartySetup(false)}
+          onConfirm={(guestName, humans) => {
+            const foes = soloUnitsRef.current.filter((u) => !u.isPlayer);
+            const units = [...humans, ...foes];
+            soloUnitsRef.current = units;
+            setSoloUnits(units);
+            setParty({ names: [playerName, guestName], slot: 0 });
+            setSelectedUnitId(firstUnitOf(units, 0));
+            setSelectedAbilityId(null);
+            setInspectedUnitOverrideId(null);
+            setSoloLogs((prev) => [
+              ...prev,
+              {
+                id: `log_party_${Date.now()}`,
+                turn: 1,
+                actorName: 'Arena Arbiter',
+                actionName: 'Party Formed',
+                text: `${guestName} joins ${playerName}'s party. Pass the device between turns.`,
+                timestamp: new Date().toLocaleTimeString(),
+              },
+            ]);
+            setShowPartySetup(false);
+          }}
+        />
       )}
 
       {/* Active Island Campaign Operation Banner */}
@@ -687,7 +800,7 @@ export const TacticalArenaView: React.FC = () => {
             </div>
 
             {/* Quick actions for the selected unit: attacks live right next to the board */}
-            {selectedUnit?.isPlayer && selectedUnit.hp > 0 && !isMatchOver && (
+            {selectedUnit && commands(selectedUnit) && selectedUnit.hp > 0 && !isMatchOver && (
               <div data-testid="quick-actions" className="mb-3 p-2.5 rounded-xl bg-stone-900/80 border border-stone-800 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-bold text-stone-300 mr-1">{selectedUnit.name.split(' (')[0]}:</span>
@@ -826,9 +939,11 @@ export const TacticalArenaView: React.FC = () => {
                         <div
                           className={`relative w-7 h-7 sm:w-12 sm:h-12 rounded-full overflow-hidden shadow-xl transition-transform group-hover:scale-105 border-2 ${
                             unitOnTile.isPlayer
-                              ? 'border-emerald-400 ring-2 ring-emerald-500/40 shadow-emerald-950'
+                              ? toneOf(unitOnTile) === 'sky'
+                                ? 'border-sky-400 ring-2 ring-sky-500/40 shadow-sky-950'
+                                : 'border-emerald-400 ring-2 ring-emerald-500/40 shadow-emerald-950'
                               : 'border-red-500 ring-2 ring-red-500/40 shadow-red-950'
-                          }`}
+                          } ${party && unitOnTile.isPlayer && soloPhase !== 'enemy' && !commands(unitOnTile) ? 'opacity-50' : ''}`}
                         >
                           <img
                             src={getUnitPortrait(unitOnTile)}
@@ -841,7 +956,9 @@ export const TacticalArenaView: React.FC = () => {
                           <div
                             className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold ${
                               unitOnTile.isPlayer
-                                ? 'bg-emerald-600 text-white'
+                                ? toneOf(unitOnTile) === 'sky'
+                                  ? 'bg-sky-600 text-white'
+                                  : 'bg-emerald-600 text-white'
                                 : 'bg-red-600 text-white'
                             }`}
                           >
@@ -925,8 +1042,8 @@ export const TacticalArenaView: React.FC = () => {
                       <div>
                         <div className="font-bold text-stone-200 text-xs flex items-center gap-1.5">
                           <span>{u.name}</span>
-                          <span className={`text-[9px] uppercase font-bold px-1 rounded ${u.isPlayer ? 'bg-emerald-950 text-emerald-300' : 'bg-red-950 text-red-300'}`}>
-                            {u.isPlayer ? 'Ally' : 'Rival'}
+                          <span className={`text-[9px] uppercase font-bold px-1 rounded ${u.isPlayer ? (toneOf(u) === 'sky' ? 'bg-sky-950 text-sky-300' : 'bg-emerald-950 text-emerald-300') : 'bg-red-950 text-red-300'}`}>
+                            {u.isPlayer ? (party ? ownerName(u) : 'Ally') : 'Rival'}
                           </span>
                         </div>
                         <div className="text-[10px] text-stone-400 flex gap-2">
@@ -1080,7 +1197,7 @@ export const TacticalArenaView: React.FC = () => {
                       >
                         <button
                           onClick={() => handleAbilityButton(ability)}
-                          disabled={!canAffordAp || !selectedUnit.isPlayer || !isMyTurn || abilityUse(ability) === 'unavailable'}
+                          disabled={!canAffordAp || !commands(selectedUnit) || !isMyTurn || abilityUse(ability) === 'unavailable'}
                           className={`w-full p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between space-y-2 cursor-pointer shadow h-full ${
                             isSelected
                               ? 'bg-amber-950/80 border-amber-400 ring-2 ring-amber-400/40 text-amber-100'
@@ -1220,7 +1337,7 @@ export const TacticalArenaView: React.FC = () => {
                       <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
                         inspectedUnit.isPlayer ? 'bg-emerald-950 text-emerald-300' : 'bg-red-950 text-red-300'
                       }`}>
-                        {inspectedUnit.isPlayer ? 'Ally Squad' : 'Rival Clan'}
+                        {inspectedUnit.isPlayer ? (party ? `${ownerName(inspectedUnit)}'s Squad` : 'Ally Squad') : 'Rival Clan'}
                       </span>
                       <span className="text-amber-400 font-semibold">{inspectedUnit.unitClass}</span>
                     </div>
