@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { NEW_GAME_XP, levelForXp } from './balance';
 import { BOT_PROFILES as P, BOT_TRANSITIONS, BotState, runBotTurn } from './bot';
 import { simulateMatch, Pilot } from './sim';
 import { buildArenaGrid, buildSoloUnits } from './arenaSetup';
@@ -204,4 +205,15 @@ test('island terrain: water/mud/bones appear only on open grass, never rocks, fo
     }
   }
   assert.deepEqual(buildArenaGrid('tempest'), plain, 'tempest is open sky');
+});
+
+test('campaign: the first real mission (sector_primoris_2) is winnable by a moderate player at the starting level', () => {
+  const sector = ISLAND_CAMPAIGN_SECTORS.find((s) => s.id === 'sector_primoris_2')!;
+  const g = buildArenaGrid(sector.islandId);
+  let wins = 0;
+  for (let seed = 1; seed <= SEEDS; seed++) {
+    const units = buildSoloUnits('Tester', starters, sector as any, levelForXp(NEW_GAME_XP));
+    if (simulateMatch({ units, grid: g, seed, player: P.moderate, enemy: P.moderate }).winner === 'player') wins++;
+  }
+  assert.ok(wins / SEEDS >= 0.6, `won ${wins}/${SEEDS}`);
 });

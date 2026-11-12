@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { BALANCE, NEW_GAME_XP, levelForXp, xpForLevel, playerLevelScale } from './balance';
 import assert from 'node:assert/strict';
 import {
   calculateDistance,
@@ -242,4 +243,14 @@ test('canUnitMoveTo charges terrain: a water tile needs the extra AP', () => {
   const ok = canUnitMoveTo({ ...base, ap: 2 }, 2, 0, grid, [], 'u');
   assert.ok(ok.valid);
   assert.equal(ok.apCost, 2);
+});
+
+test('level curve: a new game is level 6, levels rise with XP and cap at the maximum', () => {
+  assert.equal(levelForXp(NEW_GAME_XP), BALANCE.startLevel + 1, 'a new game starts one level above the baseline');
+  assert.equal(levelForXp(xpForLevel(6) - 1), 5);
+  assert.equal(levelForXp(xpForLevel(6)), 6);
+  assert.equal(levelForXp(0), 1);
+  assert.equal(levelForXp(10_000_000), BALANCE.maxLevel);
+  assert.equal(playerLevelScale(BALANCE.startLevel), 1);
+  assert.ok(playerLevelScale(8) > playerLevelScale(6));
 });

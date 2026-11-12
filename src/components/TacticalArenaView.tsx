@@ -54,6 +54,7 @@ import {
 export const TacticalArenaView: React.FC = () => {
   const {
     playerName,
+    playerLevel,
     myPlayerId,
     asyncGame,
     sendGameAction,
@@ -118,7 +119,7 @@ export const TacticalArenaView: React.FC = () => {
     const seed = newSeed();
     soloRngRef.current = createRng(seed);
 
-    setSoloUnits(buildSoloUnits(playerName, tamedDinos, activeSectorMission));
+    setSoloUnits(buildSoloUnits(playerName, tamedDinos, activeSectorMission, playerLevel));
     setSoloLogs([
       {
         id: `log_init_${Date.now()}`,

@@ -1,4 +1,5 @@
 import { GridTile, IslandSector, TamedDino, UnitEntity } from '../types/game';
+import { BALANCE, enemyLevelScale, playerLevelScale } from './balance';
 import { DINOSAUR_SPECIES, UNIT_PORTRAITS } from './constants';
 
 // Arena and squad construction for solo matches (skirmish + campaign). Pure, so the
@@ -65,7 +66,8 @@ export function buildArenaGrid(islandId?: string): GridTile[] {
 export function buildSoloUnits(
   playerName: string,
   tamedDinos: TamedDino[],
-  activeSectorMission: IslandSector | null
+  activeSectorMission: IslandSector | null,
+  playerLevel: number = BALANCE.startLevel
 ): UnitEntity[] {
   // Player Hero is Human class with long-range tech utility
   const playerHeroUnit: UnitEntity = {
@@ -169,7 +171,18 @@ export function buildSoloUnits(
     statusEffects: [],
   };
 
-  const playerUnits = [playerHeroUnit, playerDino1, playerDino2];
+  const grow = playerLevelScale(playerLevel);
+  const playerUnits = [playerHeroUnit, playerDino1, playerDino2].map((u) =>
+    grow === 1
+      ? u
+      : {
+          ...u,
+          hp: Math.round(u.hp * grow),
+          maxHp: Math.round(u.maxHp * grow),
+          attack: Math.round(u.attack * grow),
+          defense: Math.round(u.defense * grow),
+        }
+  );
 
   // Enemy units: build from activeSectorMission if launching campaign operation, else default rivals
   let enemyUnits: UnitEntity[] = [];
@@ -182,7 +195,7 @@ export function buildSoloUnits(
     enemyUnits = activeSectorMission.enemySquad.map((enemy, idx) => {
       const slot = spawnSlots[idx] || { x: 7, y: idx + 1 };
       const species = enemy.speciesId ? DINOSAUR_SPECIES[enemy.speciesId] : null;
-      const levelScale = 1 + (enemy.level - 1) * 0.15;
+      const levelScale = enemyLevelScale(enemy.level);
       const hp = species ? Math.round(species.baseHp * levelScale) : 190;
       const attack = species ? Math.round(species.baseAttack * levelScale) : 40;
       const defense = species ? Math.round(species.baseDefense * levelScale) : 22;
