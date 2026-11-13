@@ -28,7 +28,7 @@ Status: **locked 2026-11-10 and built** on branch `claude/amazing-cerf-7db9o5`. 
 | 7 | Campaign | Solo progress, not async. Cloud save is a later item that reuses the same identity and database. |
 | 8 | AI features | Set aside, then CUT 2026-11-13: the Gemini endpoints were never ported and were removed. |
 
-Still open (not decided here): the name (Primordial vs Primal).
+Still open (not decided here): the name (since decided: Primordial, 2026-11-13).
 
 ## Identity
 

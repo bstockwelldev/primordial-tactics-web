@@ -57,4 +57,4 @@ Scaffold stage (2026-11-09). The arena server, combat rules, all six screens, th
 
 ## Name note
 
-Repo and GDD say **Primordial Tactics**; app metadata, the HTML title, and server strings say **Primal Tactics**. One name to be picked — see the adaptation doc.
+The game is named **Primordial Tactics** (owner decision, 2026-11-13); the app title, manifest, navbar and server strings were renamed to match. In-world item names such as "Primal Meat" and "Primal Smithy" are unrelated and kept.

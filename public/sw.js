@@ -5,7 +5,7 @@ self.addEventListener('push', (event) => {
     data = event.data ? event.data.json() : {};
   } catch (_) {}
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Primal Tactics', {
+    self.registration.showNotification(data.title || 'Primordial Tactics', {
       body: data.body || 'Something happened in one of your games.',
       tag: data.gameId || 'primordial-tactics',
       data: { url: data.gameId ? `/?game=${data.gameId}` : '/' },
