@@ -13,6 +13,7 @@ import {
   controllerOf,
   defaultAssignments,
   firstPhase,
+  handoffNeeded,
   isHumanControlled,
   livingSlots,
   nextPhase,
@@ -183,4 +184,60 @@ test('setup helpers: default assignments mirror the engine split, and swapping t
   assert.deepEqual(assignSlots(units, swapped), swapSlots(units));
   assert.deepEqual(swapAssignments(swapped), defaults);
   assert.deepEqual(defaultAssignments(solo()), { player_hero: 0, player_raptor: 0, player_trike: 0 });
+});
+
+// ---- slice 3: handoff and save/resume ----
+import { readSoloSave } from './soloSave';
+
+const saveOf = (over: Record<string, unknown> = {}, units: UnitEntity[] = coop()) =>
+  JSON.stringify({ sectorId: 'sector_primoris_2', units, logs: [], turn: 3, isPlayerTurn: true, ...over });
+
+test('handoffNeeded: only when two humans are alive and the target slot can play', () => {
+  const units = coop();
+  assert.equal(handoffNeeded(units, 0), true);
+  assert.equal(handoffNeeded(units, 1), true);
+  assert.equal(handoffNeeded(kill(units, 1), 0), false, 'buddy wiped: no one to pass to');
+  assert.equal(handoffNeeded(kill(units, 0), 1), false, 'host wiped: buddy plays on without a prompt');
+  assert.equal(handoffNeeded(kill(units, 1), 1), false, 'a wiped slot is never handed the device');
+  assert.equal(handoffNeeded(solo(), 0), false, 'solo matches never prompt');
+});
+
+test('readSoloSave: a solo save from before co-op loads unchanged', () => {
+  const units = solo();
+  const raw = JSON.stringify({ sectorId: null, units, logs: [{ id: 'l1' }], turn: 2, isPlayerTurn: false });
+  const save = readSoloSave(raw)!;
+  assert.equal(save.turn, 2);
+  assert.equal(save.isPlayerTurn, false);
+  assert.equal(save.party, undefined);
+  assert.deepEqual(save.units, units);
+});
+
+test('readSoloSave: a co-op save mid-phase keeps its party and active slot', () => {
+  const save = readSoloSave(saveOf({ party: { names: ['Hana', 'Gus'], slot: 1 } }))!;
+  assert.deepEqual(save.party, { names: ['Hana', 'Gus'], slot: 1 });
+  assert.equal(save.units.filter((u) => u.controller === 1).length, 2);
+  // survives a full save -> parse round trip
+  assert.deepEqual(readSoloSave(JSON.stringify(save))!.party, { names: ['Hana', 'Gus'], slot: 1 });
+});
+
+test('readSoloSave: unusable saves are rejected instead of crashing or stranding units', () => {
+  assert.equal(readSoloSave(null), null);
+  assert.equal(readSoloSave(''), null);
+  assert.equal(readSoloSave('{not json'), null);
+  assert.equal(readSoloSave('null'), null);
+  assert.equal(readSoloSave(JSON.stringify({ units: [], turn: 1, isPlayerTurn: true })), null);
+  assert.equal(readSoloSave(JSON.stringify({ units: solo(), turn: 'x', isPlayerTurn: true })), null);
+  // a co-op save whose party data is damaged would leave slot-1 units with nobody to play them
+  assert.equal(readSoloSave(saveOf({ party: { names: ['Hana'], slot: 1 } })), null);
+  assert.equal(readSoloSave(saveOf({ party: { names: ['Hana', 'Gus'], slot: 2 } })), null);
+  assert.equal(readSoloSave(saveOf({ party: { names: ['Hana', ' '], slot: 0 } })), null);
+  assert.equal(readSoloSave(saveOf({ party: null })), null, 'controllers without a party');
+});
+
+test('a resumed co-op match picks up on the saved slot, and the enemy phase hands back to the first living slot', () => {
+  const save = readSoloSave(saveOf({ party: { names: ['Hana', 'Gus'], slot: 1 } }))!;
+  assert.equal(canControl(save.units.find((u) => u.id === 'player_trike')!, save.party!.slot), true);
+  assert.equal(canControl(save.units.find((u) => u.id === 'player_hero')!, save.party!.slot), false);
+  assert.deepEqual(nextPhase(save.units, save.party!.slot), { phase: 'enemy', newRound: false });
+  assert.equal(firstPhase(save.units), 0);
 });
