@@ -76,3 +76,12 @@ export function defaultAssignments(units: UnitEntity[]): Record<string, Slot> {
 export function swapAssignments(assignments: Record<string, Slot>): Record<string, Slot> {
   return Object.fromEntries(Object.entries(assignments).map(([id, slot]) => [id, slot === 0 ? 1 : 0] as [string, Slot]));
 }
+
+/**
+ * Whether the device has to change hands before `to` plays. With only one human still alive
+ * there is nobody to hand over to, so the prompt is skipped (spec acceptance criterion 5).
+ */
+export function handoffNeeded(units: UnitEntity[], to: Slot): boolean {
+  const living = livingSlots(units);
+  return living.length > 1 && living.includes(to);
+}
