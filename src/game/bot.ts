@@ -1,4 +1,5 @@
 import { Ability, BattleActionLog, GridTile, UnitEntity } from '../types/game';
+import { controllerOf } from './party';
 import { calculateDamage, calculateDistance, calculateTorporDamage, canUnitMoveTo, moveApCost } from './rules';
 
 // ---------------------------------------------------------------------------
@@ -75,6 +76,8 @@ export interface BotTurnOptions {
   profile?: BotProfile;
   /** Which side the bot plays. Default: the enemy (isPlayer === false). */
   side?: 'enemy' | 'player';
+  /** Pass & play: only the units this slot commands act (the other slot's units stand still). Default: all of the side. */
+  controller?: 0 | 1;
   /** Log timestamp; injectable so results are byte-for-byte reproducible. */
   timestamp?: string;
 }
@@ -415,6 +418,7 @@ export function runBotTurn(
 
   for (const bot of state) {
     if (bot.isPlayer !== botIsPlayer || bot.hp <= 0) continue;
+    if (options.controller !== undefined && controllerOf(bot) !== options.controller) continue;
 
     let current: BotState = 'ASSESS';
     const enter = (next: BotState) => {

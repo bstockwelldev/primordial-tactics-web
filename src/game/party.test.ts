@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildArenaGrid, buildSoloUnits } from './arenaSetup';
 import { ISLAND_CAMPAIGN_SECTORS } from './constants';
-import { BALANCE, playerLevelScale } from './balance';
-import { BOT_PROFILES } from './bot';
+import { BALANCE, COOP_SECTOR_SCALE, coopEnemyScaleFor, levelForXp, NEW_GAME_XP, playerLevelScale } from './balance';
+import { BOT_PROFILES, runBotTurn } from './bot';
+import { createRng } from './rng';
 import { checkWinCondition } from './rules';
 import { simulateMatch } from './sim';
 import {
@@ -69,9 +70,12 @@ test('party: the guest commander is built like the host commander, scaled by lev
   assert.equal(buildSoloUnits('Hana', starters, sector, undefined, { guestName: '  ' }).find((u) => u.id === 'player_guest')!.name, 'Buddy (Commander)');
 });
 
-test('party: the enemy squad and the arena are identical to a solo mission (co-op scaling comes with the balance slice)', () => {
+test('party: apart from the co-op scale, the enemy squad and the arena are identical to a solo mission', () => {
   const enemies = (units: UnitEntity[]) => units.filter((u) => !u.isPlayer);
-  assert.deepEqual(enemies(coop()), enemies(buildSoloUnits('Hana', starters, sector)));
+  assert.deepEqual(
+    enemies(buildSoloUnits('Hana', starters, sector, undefined, { guestName: 'Gus', enemyScale: 1 })),
+    enemies(buildSoloUnits('Hana', starters, sector))
+  );
   const tile = buildArenaGrid('primoris').find((t) => t.x === 0 && t.y === 3)!;
   assert.ok(tile && tile.type !== 'water', 'the guest commander starts on walkable ground');
 });
@@ -183,4 +187,60 @@ test('setup helpers: default assignments mirror the engine split, and swapping t
   assert.deepEqual(assignSlots(units, swapped), swapSlots(units));
   assert.deepEqual(swapAssignments(swapped), defaults);
   assert.deepEqual(defaultAssignments(solo()), { player_hero: 0, player_raptor: 0, player_trike: 0 });
+});
+
+// ---- slice 4: co-op balance ----
+test('co-op scale: enemies are multiplied per sector, the party and solo matches are untouched', () => {
+  const enemies = (u: UnitEntity[]) => u.filter((x) => !x.isPlayer);
+  const base = enemies(buildSoloUnits('Hana', starters, sector, 6));
+  const scaled = enemies(buildSoloUnits('Hana', starters, sector, 6, { guestName: 'Gus', enemyScale: 1.5 }));
+  scaled.forEach((e, i) => {
+    assert.equal(e.hp, Math.round(base[i].hp * 1.5));
+    assert.equal(e.maxHp, e.hp);
+    assert.equal(e.attack, Math.round(base[i].attack * 1.5));
+    assert.equal(e.defense, Math.round(base[i].defense * 1.5));
+  });
+  // default: the sector's own table entry
+  const byTable = enemies(buildSoloUnits('Hana', starters, sector, 6, { guestName: 'Gus' }));
+  assert.equal(byTable[0].hp, Math.round(base[0].hp * coopEnemyScaleFor(sector.id)));
+  // solo is never scaled
+  assert.deepEqual(enemies(buildSoloUnits('Hana', starters, sector, 6)), base);
+  assert.equal(coopEnemyScaleFor(null), BALANCE.coopEnemyScale, 'skirmish falls back to the global scale');
+  assert.equal(coopEnemyScaleFor('sector_unknown'), BALANCE.coopEnemyScale);
+  for (const [id, v] of Object.entries(COOP_SECTOR_SCALE)) assert.ok(v > 1 && v < 3, `${id} scale ${v}`);
+});
+
+test('bot controller filter: only the named slot acts', () => {
+  const grid = buildArenaGrid('primoris');
+  const units = coop().map((u) => (u.isPlayer ? { ...u, ap: u.maxAp } : u));
+  const slot1 = runBotTurn(units, grid, 1, createRng(3), { profile: BOT_PROFILES.moderate, side: 'player', controller: 1, timestamp: '' }).units;
+  for (const u of slot1.filter((x) => x.isPlayer && controllerOf(x) === 0)) {
+    const before = units.find((x) => x.id === u.id)!;
+    assert.deepEqual([u.x, u.y, u.ap], [before.x, before.y, before.ap], `${u.id} (slot 0) must not act`);
+  }
+  assert.ok(slot1.some((u) => u.isPlayer && controllerOf(u) === 1 && (u.ap < u.maxAp || u.x !== units.find((x) => x.id === u.id)!.x)), 'slot 1 units acted');
+});
+
+test('simulator: a solo match with no controllers is unchanged by the party support', () => {
+  const grid = buildArenaGrid('primoris');
+  const units = buildSoloUnits('Hana', starters, sector, 6);
+  const a = simulateMatch({ units, grid, seed: 11, player: BOT_PROFILES.moderate, enemy: BOT_PROFILES.moderate });
+  assert.notEqual(a.winner, 'unfinished');
+  assert.deepEqual(a, simulateMatch({ units, grid, seed: 11, player: BOT_PROFILES.moderate, enemy: BOT_PROFILES.moderate }));
+});
+
+test('balance band: two moderate bots beat every campaign sector at its expected level, but not trivially', () => {
+  // 30 seeds are noisy (+-9 points), so this guards against drift; `npm run balance` is the real 55-85% check.
+  const seeds = 30;
+  ISLAND_CAMPAIGN_SECTORS.forEach((s, i) => {
+    const lvl = levelForXp(NEW_GAME_XP + 350 * Math.max(0, i - 1));
+    const grid = buildArenaGrid((s as any).islandId);
+    const units = buildSoloUnits('Hana', starters, s as any, lvl, { guestName: 'Gus' });
+    let wins = 0;
+    for (let seed = 1; seed <= seeds; seed++) {
+      if (simulateMatch({ units, grid, seed, player: BOT_PROFILES.moderate, enemy: BOT_PROFILES.moderate }).winner === 'player') wins++;
+    }
+    const pct = (wins / seeds) * 100;
+    assert.ok(pct >= 40 && pct <= 95, `${s.id}: ${pct.toFixed(0)}% wins at level ${lvl}`);
+  });
 });

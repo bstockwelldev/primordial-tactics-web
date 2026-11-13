@@ -23,6 +23,28 @@ Sector 1 starts liberated, so the first real fight is sector 2. Expected level a
 | sector_magitek_2 | 7 | High Technocrat Vane L7, Titan Mech-Trike L7, Overclocked Clubtail L7 | 13 | 0% (0–2) | 100% (98–100) | 18% (13–23) | 9.0 | 0 |
 | sector_magitek_3 | 8 | Arch-Warlord Malakor L8, Cyber-Apex Tyrant L8, Dreadnought Bastion L8 | 13 | 0% (0–2) | 69% (62–75) | 59% (52–66) | 12.6 | 0 |
 
+## Co-op (pass & play, two bots share the human side)
+
+Party: host commander + Ghostclaw vs buddy commander + Shieldhorn, default split; slot 0 acts, then slot 1, then the rival clan. Both slots are moderate bots at the expected level. Enemy stats are multiplied by the sector's co-op scale (`COOP_SECTOR_SCALE` in `src/game/balance.ts`; skirmish uses `BALANCE.coopEnemyScale`). Target: 55-85% per sector. The bots are a floor: a human pair will usually do better.
+
+| Sector | Expected level | Co-op unscaled (x1.0) | Scale | Co-op at scale | In 55-85% band |
+|---|---|---|---|---|---|
+| sector_primoris_1 | 6 | 100% (98–100) | x1.657 | 51% (44–57) | NO |
+| sector_primoris_2 | 6 | 100% (98–100) | x1.32 | 71% (64–76) | yes |
+| sector_primoris_3 | 7 | 100% (98–100) | x1.25 | 77% (71–82) | yes |
+| sector_caldera_1 | 8 | 100% (98–100) | x1.66 | 81% (75–86) | yes |
+| sector_caldera_2 | 9 | 100% (98–100) | x1.23 | 68% (61–74) | yes |
+| sector_caldera_3 | 9 | 100% (98–100) | x1.125 | 62% (55–68) | yes |
+| sector_tempest_1 | 10 | 100% (98–100) | x2.15 | 57% (50–64) | yes |
+| sector_tempest_2 | 11 | 100% (98–100) | x1.3 | 69% (62–75) | yes |
+| sector_tempest_3 | 11 | 100% (98–100) | x1.18 | 73% (66–78) | yes |
+| sector_magitek_1 | 12 | 100% (98–100) | x1.53 | 69% (62–75) | yes |
+| sector_magitek_2 | 13 | 100% (98–100) | x1.17 | 78% (71–83) | yes |
+| sector_magitek_3 | 13 | 100% (98–100) | x1.18 | 71% (64–77) | yes |
+
+1 sector(s) are outside the band: re-tune their scale.
+Known exception: sector_primoris_1 is a known exception: its win rate jumps from 92% to 50% between x1.656 and x1.657 (a one-hit-kill threshold), so no multiplier lands in the band; it starts liberated, so it is only replayed.
+
 ## Level curve
 
 XP to reach level L is 25 x L x (L - 1). Player squad stats grow 7.5% per level above 5; enemy stats grow 9% per enemy level.
