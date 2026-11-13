@@ -21,7 +21,10 @@ import { createRng, newSeed } from '../game/rng';
 import type { GameAction } from '../game/engine';
 import { timeLeft } from '../lib/asyncApi';
 import { SOLO_SAVE_KEY, SoloSave, readSoloSave } from '../game/soloSave';
-import { PartyPhase, Slot, canControl, controllerOf, firstPhase, handoffNeeded, nextPhase } from '../game/party';
+import { PartyPhase, Slot, canControl, controllerOf, firstPhase, handoffNeeded, nextPhase, refreshApFor } from '../game/party';
+import { VersusSeries, boardWinner, gameResult, limitWinner, namesBySlot, nextGame, recordGame, rematch, roundLimitReached, unitsForGame } from '../game/versusSeries';
+import { VersusDraft } from './VersusDraft';
+import { VersusResult } from './VersusResult';
 import { HandoffOverlay } from './HandoffOverlay';
 import { PartySetupModal } from './PartySetupModal';
 import {
@@ -98,6 +101,10 @@ export const TacticalArenaView: React.FC = () => {
   const partyRef = useRef(party);
   partyRef.current = party;
   const [showPartySetup, setShowPartySetup] = useState(false);
+  // Local versus (docs/local-versus-spec.md): the two squads and the best-of-two score, or null outside versus.
+  const [versus, setVersus] = useState<VersusSeries | null>(null);
+  const [showVersusDraft, setShowVersusDraft] = useState(false);
+  const [versusEnd, setVersusEnd] = useState<'wipeout' | 'limit'>('wipeout');
   // Pass & play: the player the device is being handed to (overlay up until they press Ready).
   const [handoffTo, setHandoffTo] = useState<Slot | null>(null);
   const soloUnitsRef = useRef(soloUnits);
@@ -133,6 +140,8 @@ export const TacticalArenaView: React.FC = () => {
     setSoloTurn(1);
     setSoloIsPlayerTurn(true);
     setParty(null);
+    setVersus(null);
+    setShowVersusDraft(false);
     setHandoffTo(null);
     const seed = newSeed();
     soloRngRef.current = createRng(seed);
@@ -192,7 +201,8 @@ export const TacticalArenaView: React.FC = () => {
 
   // Keep the in-progress solo match on this device so it can be resumed from My Games.
   useEffect(() => {
-    if (hasRoom || !isSoloMode || soloUnits.length === 0) return;
+    // A versus match never touches the campaign's save (its own persistence is a later slice).
+    if (hasRoom || !isSoloMode || soloUnits.length === 0 || versus) return;
     if (soloWinner) {
       localStorage.removeItem(SOLO_SAVE_KEY);
       return;
@@ -206,7 +216,7 @@ export const TacticalArenaView: React.FC = () => {
       ...(party ? { party } : {}),
     };
     localStorage.setItem(SOLO_SAVE_KEY, JSON.stringify(save));
-  }, [hasRoom, isSoloMode, soloUnits, soloLogs, soloTurn, soloIsPlayerTurn, soloWinner, party]);
+  }, [hasRoom, isSoloMode, soloUnits, soloLogs, soloTurn, soloIsPlayerTurn, soloWinner, party, versus]);
 
   // Derived Active Match State
   const activeUnits = currentRoom ? currentRoom.units : soloUnits;
@@ -223,9 +233,15 @@ export const TacticalArenaView: React.FC = () => {
   /** May the player in front of the device command this unit now? (Online rooms keep the old side check.) */
   const commands = (unit: UnitEntity) => (currentRoom ? unit.isPlayer : canControl(unit, soloPhase));
   const ownerName = (unit: UnitEntity) => (party ? party.names[controllerOf(unit)] : playerName);
-  const toneOf = (unit: UnitEntity) => (party && unit.isPlayer && controllerOf(unit) === 1 ? 'sky' : 'emerald');
+  /** On the actor's side? In versus the actor's side is whoever is playing now; elsewhere it is the human side. */
+  const isFriendly = (unit: UnitEntity) => (versus ? commands(unit) : unit.isPlayer);
+  /** Drawn in a human colour (emerald or sky) rather than rival red. In versus both sides are human. */
+  const isHumanColour = (unit: UnitEntity) => !!versus || unit.isPlayer;
+  const toneOf = (unit: UnitEntity) => (party && isHumanColour(unit) && controllerOf(unit) === 1 ? 'sky' : 'emerald');
   const firstUnitOf = (units: UnitEntity[], phase: PartyPhase) => units.find((u) => canControl(u, phase))?.id ?? null;
   const canOfferBuddy = !currentRoom && !party && !isMatchOver && soloIsPlayerTurn && soloTurn === 1 && soloLogs.length <= 1;
+  // Versus is its own plain-arena mode: offered from a fresh skirmish, never from a campaign sector.
+  const canOfferVersus = canOfferBuddy && !activeSectorMission;
 
   const [inspectedUnitOverrideId, setInspectedUnitOverrideId] = useState<string | null>(null);
 
@@ -240,7 +256,8 @@ export const TacticalArenaView: React.FC = () => {
 
   // Trigger Victory celebration
   useEffect(() => {
-    if (isMatchOver) {
+    // Versus is for fun only: no confetti for a side, and above all no XP, loot or sector payout.
+    if (isMatchOver && !versus) {
       const didWin = isSoloMode
         ? soloWinner === 'player_me'
         : winnerId === myPlayerId;
@@ -284,7 +301,7 @@ export const TacticalArenaView: React.FC = () => {
   const enemiesInRange = (ability: Ability) =>
     selectedUnit
       ? activeUnits.filter(
-          (u) => !u.isPlayer && u.hp > 0 && calculateDistance(selectedUnit.x, selectedUnit.y, u.x, u.y) <= ability.range
+          (u) => !isFriendly(u) && u.hp > 0 && calculateDistance(selectedUnit.x, selectedUnit.y, u.x, u.y) <= ability.range
         ).length
       : 0;
 
@@ -314,13 +331,13 @@ export const TacticalArenaView: React.FC = () => {
     );
 
     // If clicked a friendly unit, select it!
-    if (clickedUnit && clickedUnit.isPlayer && !commands(clickedUnit)) {
+    if (clickedUnit && isFriendly(clickedUnit) && !commands(clickedUnit)) {
       // The other player's unit: look, don't touch.
       setInspectedUnitOverrideId(clickedUnit.id);
       notify(`That unit is ${ownerName(clickedUnit)}'s. Wait for their turn.`, 2500);
       return;
     }
-    if (clickedUnit && clickedUnit.isPlayer) {
+    if (clickedUnit && isFriendly(clickedUnit)) {
       setSelectedUnitId(clickedUnit.id);
       setInspectedUnitOverrideId(null);
       setSelectedAbilityId(null);
@@ -328,15 +345,15 @@ export const TacticalArenaView: React.FC = () => {
     }
 
     // If ability was selected and clicked an enemy, trigger ability
-    if (selectedUnit && selectedAbilityId && clickedUnit && !clickedUnit.isPlayer) {
+    if (selectedUnit && selectedAbilityId && clickedUnit && !isFriendly(clickedUnit)) {
       handleExecuteAbility(selectedUnit.id, clickedUnit.id, selectedAbilityId);
       return;
     }
 
     // If clicked an enemy unit without an armed ability, inspect that enemy's dossier!
-    if (clickedUnit && !clickedUnit.isPlayer) {
+    if (clickedUnit && !isFriendly(clickedUnit)) {
       setInspectedUnitOverrideId(clickedUnit.id);
-      if (selectedUnit?.isPlayer) notify('To attack: pick an attack above the grid, then tap the enemy.', 3500);
+      if (selectedUnit && isFriendly(selectedUnit)) notify('To attack: pick an attack above the grid, then tap the enemy.', 3500);
       return;
     }
 
@@ -484,6 +501,11 @@ export const TacticalArenaView: React.FC = () => {
         return u;
       });
 
+      if (versus) {
+        const over = boardWinner(updatedUnits);
+        if (over !== null) finishVersusGame(updatedUnits, over, 'wipeout');
+        return;
+      }
       const check = checkWinCondition(updatedUnits);
       if (check.isOver) {
         const winner = check.winnerPlayerId || 'player_me';
@@ -493,12 +515,77 @@ export const TacticalArenaView: React.FC = () => {
     }
   };
 
+  // Versus: set up game `series.game` of the pair on the plain arena, side A to move.
+  const beginVersusGame = (series: VersusSeries) => {
+    const units = unitsForGame(series);
+    soloUnitsRef.current = units;
+    soloRngRef.current = createRng(newSeed());
+    setVersus(series);
+    setShowVersusDraft(false);
+    setIsSoloMode(true);
+    setSoloUnits(units);
+    setSoloTurn(1);
+    setSoloIsPlayerTurn(true);
+    setSoloWinner(null);
+    setParty({ names: namesBySlot(series), slot: 0 });
+    setHandoffTo(0);
+    setSelectedUnitId(firstUnitOf(units, 0));
+    setSelectedAbilityId(null);
+    setInspectedUnitOverrideId(null);
+    setHoveredTile(null);
+    setVersusEnd('wipeout');
+    const [a, b] = namesBySlot(series);
+    setSoloLogs([
+      {
+        id: `log_versus_${Date.now()}`,
+        turn: 1,
+        actorName: 'Arena Arbiter',
+        actionName: 'Versus',
+        text: `Game ${series.game} of 2: ${a} (moves first) against ${b}. Pass the device between turns.`,
+        timestamp: new Date().toLocaleTimeString(),
+      },
+    ]);
+  };
+
+  // Versus: a game ended (a side wiped out, or the round limit). Records it; the result panel takes over.
+  const finishVersusGame = (units: UnitEntity[], winner: Slot | 'draw', by: 'wipeout' | 'limit') => {
+    if (!versus) return;
+    setSoloUnits(units);
+    setVersus(recordGame(versus, gameResult(versus, units, winner)));
+    setVersusEnd(by);
+    setHandoffTo(null);
+    setSoloWinner('versus_over');
+  };
+
+  // Versus: the player on the move is done. Hand over to the other side, or end the game at the round limit.
+  const endVersusPhase = () => {
+    if (!versus || soloPhase === 'enemy') return;
+    const next = nextPhase(soloUnits, soloPhase);
+    if (next.phase === 'enemy') return; // cannot happen: a versus match has no bots
+    if (roundLimitReached(soloTurn, next.newRound)) {
+      finishVersusGame(soloUnits, limitWinner(soloUnits), 'limit');
+      return;
+    }
+    const units = refreshApFor(soloUnits, next.phase);
+    soloUnitsRef.current = units;
+    setSoloUnits(units);
+    if (next.newRound) setSoloTurn((t) => t + 1);
+    setParty({ names: namesBySlot(versus), slot: next.phase });
+    if (handoffNeeded(units, next.phase)) setHandoffTo(next.phase);
+    setSelectedUnitId(firstUnitOf(units, next.phase));
+    setSelectedAbilityId(null);
+    setInspectedUnitOverrideId(null);
+    setHoveredTile(null);
+  };
+
   // End Turn
   const handleEndTurn = () => {
     if (!isMyTurn || isMatchOver) return;
 
     if (currentRoom) {
       act({ type: 'end_turn' });
+    } else if (versus && soloPhase !== 'enemy') {
+      endVersusPhase();
     } else if (party && soloPhase !== 'enemy' && nextPhase(soloUnits, soloPhase).phase !== 'enemy') {
       // Pass & play: this player is done; the other one goes before the rival clan does.
       const next = nextPhase(soloUnits, soloPhase).phase as Slot;
@@ -593,7 +680,7 @@ export const TacticalArenaView: React.FC = () => {
                 {currentRoom ? currentRoom.name : 'Tactical Proving Grounds'}
               </h2>
               <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-stone-800 text-amber-300 border border-stone-700">
-                {currentRoom ? 'Async PvP' : party ? 'Co-op vs AI' : 'Solo AI Skirmish'}
+                {currentRoom ? 'Async PvP' : versus ? `Versus · Game ${versus.game} of 2` : party ? 'Co-op vs AI' : 'Solo AI Skirmish'}
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs text-stone-400 mt-0.5">
@@ -624,7 +711,17 @@ export const TacticalArenaView: React.FC = () => {
               <span>Play with a buddy</span>
             </button>
           )}
-          {!currentRoom ? (
+          {canOfferVersus && (
+            <button
+              data-testid="play-versus"
+              onClick={() => setShowVersusDraft(true)}
+              className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-700 hover:bg-rose-600 text-white shadow cursor-pointer"
+            >
+              <Swords className="w-3.5 h-3.5" />
+              <span>Versus</span>
+            </button>
+          )}
+          {!currentRoom && !versus ? (
             <button
               onClick={() => setShowLobbyModal(true)}
               className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white shadow cursor-pointer transition-transform hover:scale-105"
@@ -632,7 +729,7 @@ export const TacticalArenaView: React.FC = () => {
               <Users className="w-3.5 h-3.5" />
               <span>PvP Duel</span>
             </button>
-          ) : (
+          ) : versus ? null : (
             <button
               onClick={() => {
                 setCurrentRoom(null);
@@ -655,11 +752,11 @@ export const TacticalArenaView: React.FC = () => {
 
           {!currentRoom && (
           <button
-            onClick={initSoloMatch}
+            onClick={() => (!versus || window.confirm('Quit this Versus match?')) && initSoloMatch()}
             className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset Match</span>
+            <span>{versus ? 'Quit Versus' : 'Reset Match'}</span>
           </button>
           )}
 
@@ -713,6 +810,10 @@ export const TacticalArenaView: React.FC = () => {
           units={activeUnits.filter((u) => canControl(u, handoffTo)).map((u) => u.name.split(' (')[0])}
           onReady={() => setHandoffTo(null)}
         />
+      )}
+
+      {showVersusDraft && (
+        <VersusDraft hostName={playerName} portrait={getUnitPortrait} onCancel={() => setShowVersusDraft(false)} onStart={beginVersusGame} />
       )}
 
       {showPartySetup && (
@@ -807,11 +908,11 @@ export const TacticalArenaView: React.FC = () => {
               <div className="flex items-center gap-4 text-[11px]">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm shadow-emerald-500/50" />
-                  <span>Ally Units</span>
+                  <span>{versus ? namesBySlot(versus)[0] : 'Ally Units'}</span>
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block shadow-sm shadow-red-500/50" />
-                  <span>Rival Enemies</span>
+                  <span className={`w-2.5 h-2.5 rounded-full inline-block shadow-sm ${versus ? 'bg-sky-500 shadow-sky-500/50' : 'bg-red-500 shadow-red-500/50'}`} />
+                  <span>{versus ? namesBySlot(versus)[1] : 'Rival Enemies'}</span>
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block animate-pulse" />
@@ -891,7 +992,7 @@ export const TacticalArenaView: React.FC = () => {
 
                 // Check targetable with currently selected ability
                 let isTargetable = false;
-                if (selectedUnit && selectedAbilityId && unitOnTile && !unitOnTile.isPlayer) {
+                if (selectedUnit && selectedAbilityId && unitOnTile && !isFriendly(unitOnTile)) {
                   const ability = selectedUnit.abilities.find((a) => a.id === selectedAbilityId);
                   if (ability) {
                     const dist = calculateDistance(selectedUnit.x, selectedUnit.y, tile.x, tile.y);
@@ -959,12 +1060,12 @@ export const TacticalArenaView: React.FC = () => {
                       <div className="w-full flex flex-col items-center justify-center space-y-1">
                         <div
                           className={`relative w-7 h-7 sm:w-12 sm:h-12 rounded-full overflow-hidden shadow-xl transition-transform group-hover:scale-105 border-2 ${
-                            unitOnTile.isPlayer
+                            isHumanColour(unitOnTile)
                               ? toneOf(unitOnTile) === 'sky'
                                 ? 'border-sky-400 ring-2 ring-sky-500/40 shadow-sky-950'
                                 : 'border-emerald-400 ring-2 ring-emerald-500/40 shadow-emerald-950'
                               : 'border-red-500 ring-2 ring-red-500/40 shadow-red-950'
-                          } ${party && unitOnTile.isPlayer && soloPhase !== 'enemy' && !commands(unitOnTile) ? 'opacity-50' : ''}`}
+                          } ${party && !versus && unitOnTile.isPlayer && soloPhase !== 'enemy' && !commands(unitOnTile) ? 'opacity-50' : ''}`}
                         >
                           <img
                             src={getUnitPortrait(unitOnTile)}
@@ -976,7 +1077,7 @@ export const TacticalArenaView: React.FC = () => {
                           {/* Class / Faction corner badge */}
                           <div
                             className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold ${
-                              unitOnTile.isPlayer
+                              isHumanColour(unitOnTile)
                                 ? toneOf(unitOnTile) === 'sky'
                                   ? 'bg-sky-600 text-white'
                                   : 'bg-emerald-600 text-white'
@@ -1063,8 +1164,8 @@ export const TacticalArenaView: React.FC = () => {
                       <div>
                         <div className="font-bold text-stone-200 text-xs flex items-center gap-1.5">
                           <span>{u.name}</span>
-                          <span className={`text-[9px] uppercase font-bold px-1 rounded ${u.isPlayer ? (toneOf(u) === 'sky' ? 'bg-sky-950 text-sky-300' : 'bg-emerald-950 text-emerald-300') : 'bg-red-950 text-red-300'}`}>
-                            {u.isPlayer ? (party ? ownerName(u) : 'Ally') : 'Rival'}
+                          <span className={`text-[9px] uppercase font-bold px-1 rounded ${isHumanColour(u) ? (toneOf(u) === 'sky' ? 'bg-sky-950 text-sky-300' : 'bg-emerald-950 text-emerald-300') : 'bg-red-950 text-red-300'}`}>
+                            {isHumanColour(u) ? (party ? ownerName(u) : 'Ally') : 'Rival'}
                           </span>
                         </div>
                         <div className="text-[10px] text-stone-400 flex gap-2">
@@ -1084,6 +1185,21 @@ export const TacticalArenaView: React.FC = () => {
             {/* Victory / Defeat Overlay Banner */}
             {isMatchOver && (
               <div className="absolute inset-0 bg-stone-950/90 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in z-20">
+                {versus ? (
+                  <VersusResult
+                    series={versus}
+                    round={currentTurnNumber}
+                    endedBy={versusEnd}
+                    onNextGame={() => beginVersusGame(nextGame(versus))}
+                    onRematch={() => beginVersusGame(rematch(versus, Math.random() < 0.5 ? 0 : 1))}
+                    onNewDraft={() => {
+                      initSoloMatch();
+                      setShowVersusDraft(true);
+                    }}
+                    onQuit={initSoloMatch}
+                  />
+                ) : (
+                <>
                 <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
                   <Flame className="w-12 h-12 text-amber-400 mx-auto" />
                 </div>
@@ -1120,6 +1236,8 @@ export const TacticalArenaView: React.FC = () => {
                     Battle Again
                   </button>
                 </div>
+                </>
+                )}
               </div>
             )}
           </div>
@@ -1132,7 +1250,7 @@ export const TacticalArenaView: React.FC = () => {
                   {/* High Quality Character Portrait */}
                   <div
                     className={`relative w-14 h-14 rounded-2xl overflow-hidden shadow-xl border-2 ${
-                      selectedUnit.isPlayer ? 'border-emerald-400 ring-2 ring-emerald-500/30' : 'border-red-400 ring-2 ring-red-500/30'
+                      isHumanColour(selectedUnit) ? (toneOf(selectedUnit) === 'sky' ? 'border-sky-400 ring-2 ring-sky-500/30' : 'border-emerald-400 ring-2 ring-emerald-500/30') : 'border-red-400 ring-2 ring-red-500/30'
                     }`}
                   >
                     <img
@@ -1340,7 +1458,7 @@ export const TacticalArenaView: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-14 h-14 rounded-xl overflow-hidden border-2 shadow-lg shrink-0 ${
-                      inspectedUnit.isPlayer ? 'border-emerald-500' : 'border-red-500'
+                      isHumanColour(inspectedUnit) ? (toneOf(inspectedUnit) === 'sky' ? 'border-sky-500' : 'border-emerald-500') : 'border-red-500'
                     }`}
                   >
                     <img
@@ -1356,9 +1474,9 @@ export const TacticalArenaView: React.FC = () => {
                     </h5>
                     <div className="flex items-center gap-1.5 text-xs text-stone-400 mt-0.5">
                       <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                        inspectedUnit.isPlayer ? 'bg-emerald-950 text-emerald-300' : 'bg-red-950 text-red-300'
+                        isHumanColour(inspectedUnit) ? (toneOf(inspectedUnit) === 'sky' ? 'bg-sky-950 text-sky-300' : 'bg-emerald-950 text-emerald-300') : 'bg-red-950 text-red-300'
                       }`}>
-                        {inspectedUnit.isPlayer ? (party ? `${ownerName(inspectedUnit)}'s Squad` : 'Ally Squad') : 'Rival Clan'}
+                        {isHumanColour(inspectedUnit) ? (party ? `${ownerName(inspectedUnit)}'s Squad` : 'Ally Squad') : 'Rival Clan'}
                       </span>
                       <span className="text-amber-400 font-semibold">{inspectedUnit.unitClass}</span>
                     </div>

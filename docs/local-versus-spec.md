@@ -103,6 +103,8 @@ A match in progress can be saved so a reload resumes it, but it is stored under 
 4. **Persistence:** `pt_versus_match`, resume with handoff, My Games entry.
 5. **Docs:** handoff update and the GDD note if Brandon wants it.
 
+*As built (slice 3, 2026-11-13):* a "Versus" button beside "Play with a buddy" (fresh skirmish only, never from a campaign sector) opens `VersusDraft`: names, Player 1 picks, a full-screen pass screen that shows none of the picks, Player 2 picks, then both squads and a coin flip are revealed together. Picks live only in component state (checked: `localStorage` is byte-identical through the whole draft). The match is the best of two (`src/game/versusSeries.ts`, pure and tested): game 1 puts the coin-flip winner on side A, game 2 swaps sides, `VersusResult` shows the hand-over to game 2 and then the pair result with Rematch / New draft / Quit. In play, the co-op banner, handoff overlay and inspect-only gating are reused, tokens are emerald and sky (no red), End Turn reads "End <Name>'s turn", and the round limit (25) ends a game after both sides finish round 25. Versus never calls `recordMatchResult` (no XP, loot, liberation) and never writes `pt_solo_match`; persistence is slice 4, so a reload mid-versus currently returns to the skirmish. Browser-verified at desktop and 375px: pass-only game to the limit (draw), a real fight to a wipeout (round 5), game 2 with swapped sides, pair result, XP untouched.
+
 Slices 1 and 2 first, since the pool and the first-mover fix decide whether the mode is worth building UI for. Slice 3 depends on 1.
 
 ## 8. Later (out of scope now)

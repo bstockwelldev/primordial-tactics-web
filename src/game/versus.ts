@@ -90,6 +90,9 @@ function templateUnit(id: VersusTemplateId, side: Slot, idx: number, owner: stri
   };
 }
 
+/** One template at full health, for the draft screen's cards (tuned stats, no side or owner). */
+export const previewTemplate = (id: VersusTemplateId): UnitEntity => templateUnit(id, 0, 0, 'preview');
+
 /** Both squads on the mirrored deployment. Picks are template ids; throws on an illegal squad. */
 export function buildVersusUnits(picksA: readonly string[], picksB: readonly string[]): UnitEntity[] {
   for (const picks of [picksA, picksB]) {
