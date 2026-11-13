@@ -74,7 +74,7 @@ Both desktop and mobile browsers are in scope. Verified state of the current UI 
 
 ## AI
 
-There are no LLM features. The Gemini NPC chat and post-match debrief (`/api/npc-dialogue`, `/api/match-feedback`) only ever ran on the local dev server, did nothing on production, and were removed 2026-11-13 (see `docs/handoff.md`). The skirmish opponent is a rule-based bot (`src/game/bot.ts`). `GET /api/roadmap` serves a static phased roadmap from the dev server.
+There are no LLM features. The Gemini NPC chat and post-match debrief (`/api/npc-dialogue`, `/api/match-feedback`) only ever ran on the local dev server, did nothing on production, and were removed 2026-11-13 (see `docs/handoff.md`). The skirmish opponent is a rule-based bot (`src/game/bot.ts`). The Roadmap modal reads a static list bundled with the client (`src/game/roadmap.ts`); it used to fetch `/api/roadmap` from the dev server and was empty on production until 2026-11-13.
 
 ## Multiplayer readiness
 

@@ -1,21 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useGame } from '../context/GameContext';
-import { apiUrl } from '../lib/api';
+import { ROADMAP_PHASES } from '../game/roadmap';
 import { Map, X, CheckCircle2, Clock, Sparkles, Trophy, Shield, Rocket } from 'lucide-react';
 
 export const RoadmapModal: React.FC = () => {
   const { showRoadmapModal, setShowRoadmapModal } = useGame();
-  const [roadmapData, setRoadmapData] = useState<any | null>(null);
-
-  useEffect(() => {
-    if (showRoadmapModal && !roadmapData) {
-      fetch(apiUrl('/api/roadmap'))
-        .then((res) => res.json())
-        .then((data) => setRoadmapData(data))
-        .catch((err) => console.warn('Failed to load roadmap:', err));
-    }
-  }, [showRoadmapModal, roadmapData]);
-
   if (!showRoadmapModal) return null;
 
   return (
@@ -47,7 +36,7 @@ export const RoadmapModal: React.FC = () => {
 
         {/* Roadmap Phases List */}
         <div className="p-6 overflow-y-auto space-y-6">
-          {(roadmapData?.phases || []).map((phaseItem: any, idx: number) => {
+          {ROADMAP_PHASES.map((phaseItem, idx) => {
             const isCurrent = idx === 0;
 
             return (
@@ -83,7 +72,7 @@ export const RoadmapModal: React.FC = () => {
                 </div>
 
                 <ul className="space-y-1.5 pt-1 text-xs text-stone-300">
-                  {phaseItem.milestones.map((m: string, mIdx: number) => (
+                  {phaseItem.milestones.map((m, mIdx) => (
                     <li key={mIdx} className="flex items-start gap-2">
                       <CheckCircle2
                         className={`w-4 h-4 shrink-0 mt-0.5 ${
