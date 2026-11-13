@@ -6,7 +6,6 @@ import {
   Swords,
   Compass,
   Home,
-  MessageSquare,
   Map,
   Users,
   Sparkles,
@@ -25,7 +24,6 @@ export const Navbar: React.FC = () => {
     isConnected,
     setShowRoadmapModal,
     setShowLobbyModal,
-    setActiveNpcModal,
     quickAddDemoResources,
     currentRoom,
     yourTurnCount,
@@ -119,16 +117,7 @@ export const Navbar: React.FC = () => {
             <span className="hidden sm:inline">Add Supplies</span>
           </button>
 
-          {/* NPC Dialogue */}
-          <button
-            onClick={() => setActiveNpcModal('chief_kaeda')}
-            className="flex items-center justify-center gap-1.5 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 transition-colors shadow-sm"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span>NPC Council</span>
-          </button>
-
-          {/* Multiplayer Lobby */}
+{/* Multiplayer Lobby */}
           <button
             onClick={() => setShowLobbyModal(true)}
             className="flex items-center justify-center gap-1.5 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-orange-950/50 transition-all"

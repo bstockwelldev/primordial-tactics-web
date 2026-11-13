@@ -44,7 +44,7 @@ Verified before removal: nothing in the app imported the Firebase module — `Ga
 
 Options (decided — A):
 
-- **A (chosen): split.** Vercel hosts the static client; the arena server runs on a small always-on host (Fly.io / Render / Railway). The Gemini REST endpoints stay on the arena server for now; they are stateless and can move to Vercel serverless functions later.
+- **A (chosen): split.** Vercel hosts the static client; the arena server runs on a small always-on host (Fly.io / Render / Railway). (The Gemini NPC and debrief endpoints that once lived on this server were removed 2026-11-13.)
 - **B (rejected): managed realtime.** Replace Socket.io with a managed realtime service (Ably / Pusher) that works with Vercel serverless. Bigger rewrite of the realtime layer, new ongoing dependency.
 - **C (rejected): single always-on host.** Skip Vercel; run the whole `server.ts` on one host. Contradicts the Vercel decision.
 
@@ -72,13 +72,9 @@ Both desktop and mobile browsers are in scope. Verified state of the current UI 
 
 **Targets (to lock):** desktop browsers + iOS Safari / Android Chrome; arena playable in portrait (grid scales or scrolls — pick one) and landscape; touch targets ≥ 44px; resources visible on mobile (compact bar or sheet).
 
-## AI (Gemini)
+## AI
 
-- `GEMINI_API_KEY` env (optional). Model: `gemini-2.5-flash` via `@google/genai`.
-- `POST /api/npc-dialogue` — in-character NPC replies from `SURVIVOR_NPCS` system prompts.
-- `POST /api/match-feedback` — structured JSON debrief (grade, strengths, weaknesses, recommendation).
-- Both fall back to canned replies when no key is set. `GET /api/roadmap` serves a static phased roadmap.
-- These endpoints live on the arena server today. They are stateless, so they can move to Vercel serverless functions later without touching the game logic.
+There are no LLM features. The Gemini NPC chat and post-match debrief (`/api/npc-dialogue`, `/api/match-feedback`) only ever ran on the local dev server, did nothing on production, and were removed 2026-11-13 (see `docs/handoff.md`). The skirmish opponent is a rule-based bot (`src/game/bot.ts`). `GET /api/roadmap` serves a static phased roadmap from the dev server.
 
 ## Multiplayer readiness
 
@@ -100,11 +96,11 @@ Deferred / gaps (verified by reading `server.ts` and `TacticalArenaView.tsx`):
 
 ## Directory map
 
-- `server.ts` — Express + Socket.io arena server, Gemini REST endpoints, Vite/static serving
+- `server.ts` — Express dev server (local only), Vite/static serving
 - `src/App.tsx` — screen shell (6 screens + 4 modals)
 - `src/components/` — views and modals
 - `src/context/GameContext.tsx` — client progression + socket state, localStorage persistence
-- `src/game/` — `constants.ts` (species, buildings, recipes, sectors, augments, NPCs), `rules.ts` (combat/taming/evolution), `rules.test.ts`
+- `src/game/` — `constants.ts` (species, buildings, recipes, sectors, augments), `rules.ts` (combat/taming/evolution), `rules.test.ts`
 - `src/types/game.ts` — shared types (units, tiles, rooms, resources, augments)
 - `src/assets/images/` — dino/survivor token art (~7 MB)
 - `.aistudio/` — AI Studio export artifacts (contents not reviewed)

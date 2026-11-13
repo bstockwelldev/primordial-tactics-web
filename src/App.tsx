@@ -12,8 +12,6 @@ import { EvolutionTreeView } from './components/EvolutionTreeView';
 import { TacticalArenaView } from './components/TacticalArenaView';
 import { IslandCampaignView } from './components/IslandCampaignView';
 import { MagitekLabView } from './components/MagitekLabView';
-import { NpcDialogueModal } from './components/NpcDialogueModal';
-import { AIFeedbackModal } from './components/AIFeedbackModal';
 import { RoadmapModal } from './components/RoadmapModal';
 import { MyGamesModal } from './components/MyGamesModal';
 
@@ -34,8 +32,6 @@ const GameShell: React.FC = () => {
       </main>
 
       {/* Interactive Modals */}
-      <NpcDialogueModal />
-      <AIFeedbackModal />
       <RoadmapModal />
       <MyGamesModal />
     </div>

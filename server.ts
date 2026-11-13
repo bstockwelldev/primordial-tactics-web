@@ -3,8 +3,6 @@ import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { GoogleGenAI } from '@google/genai';
-import { SURVIVOR_NPCS } from './src/game/constants.ts';
 import { handle } from './api/_lib/app.ts';
 import { getDeps } from './api/_lib/runtime.ts';
 
@@ -23,125 +21,7 @@ const httpServer = http.createServer(app);
 
 app.use(express.json({ limit: '100kb' }));
 
-// Initialize Gemini Client
-const geminiApiKey = process.env.GEMINI_API_KEY || '';
-const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
-
 // ================= REST API Routes =================
-
-// NPC Dialogue powered by Gemini API
-app.post('/api/npc-dialogue', async (req, res) => {
-  try {
-    const { npcId, userMessage, context } = req.body;
-    const npc = SURVIVOR_NPCS.find((n) => n.id === npcId) || SURVIVOR_NPCS[0];
-
-    if (!ai) {
-      // Fallback response if API key not injected
-      return res.json({
-        reply: `${npc.greeting} (Tactical wisdom: Ensure your front-line Triceratops holds choke points while your agile Velociraptors flank the enemy's flanks!)`,
-        npcName: npc.name,
-        role: npc.role,
-      });
-    }
-
-    const prompt = `
-You are roleplaying as ${npc.name}, ${npc.title} (${npc.role}) in a gritty prehistoric dinosaur survival tactical RPG named "Primal Tactics".
-Your persona: ${npc.systemPrompt}
-Current context:
-- Survivor level: ${context?.playerLevel || 1}
-- Tamed creatures: ${context?.tamedCount || 1}
-- Active Biome: ${context?.currentBiome || 'Primeval Canopy Jungle'}
-- Survivor asked: "${userMessage}"
-
-Keep your response under 3 sentences, in-character, evocative, tactical, and atmospheric.
-`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
-    res.json({
-      reply: response.text || npc.greeting,
-      npcName: npc.name,
-      role: npc.role,
-    });
-  } catch (error: any) {
-    console.error('NPC dialogue error:', error);
-    res.json({
-      reply: 'The roar of a predator drowns out our words... Keep your tranq rifle loaded, survivor.',
-    });
-  }
-});
-
-// Tactical Battle Debrief & Strategic Coaching powered by Gemini API
-app.post('/api/match-feedback', async (req, res) => {
-  try {
-    const { winnerName, loserName, turns, actionLogs, playerWon } = req.body;
-
-    if (!ai) {
-      return res.json({
-        grade: playerWon ? 'A+' : 'B',
-        summary: playerWon
-          ? 'Decisive victory! Flawless unit positioning and effective use of action points.'
-          : 'Valiant effort. Focus on maintaining defensive formation and stacking torpor to tame high-threat units.',
-        strengths: [
-          'Effective exploitation of line-of-sight and obstacle covers.',
-          'Great synergy between Striker burst damage and Tank crowd control.',
-        ],
-        weaknesses: [
-          'Beware of leaving ranged units within leap range of raptors.',
-          'Conserve Action Points for reaction shields when facing high-crit enemies.',
-        ],
-        tacticalRecommendation:
-          'Evolve your Velociraptor into a Deinonychus to gain Fatal Frenzy for rapid burst damage in opening rounds.',
-      });
-    }
-
-    const prompt = `
-You are the Tactical Combat AI Analyst for "Primal Tactics", a competitive turn-based dinosaur survival RPG.
-Analyze this match result and provide a structured debrief for the player:
-- Match Winner: ${winnerName}
-- Loser: ${loserName}
-- Did Player Win: ${playerWon ? 'YES' : 'NO'}
-- Total Turns: ${turns}
-- Combat Highlights:
-${(actionLogs || [])
-  .slice(-10)
-  .map((l: any) => `- [Turn ${l.turn}] ${l.actorName}: ${l.text}`)
-  .join('\n')}
-
-Format your response strictly as valid JSON with the following structure:
-{
-  "grade": "S | A | B | C",
-  "summary": "1-2 sentence overview of match dynamics",
-  "strengths": ["string", "string"],
-  "weaknesses": ["string", "string"],
-  "tacticalRecommendation": "Specific recommendation regarding dinosaur evolution, ability combos, or positioning"
-}
-`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const parsed = JSON.parse(response.text || '{}');
-    res.json(parsed);
-  } catch (error: any) {
-    console.error('Match feedback error:', error);
-    res.json({
-      grade: 'A',
-      summary: 'Combat recorded in the prehistoric archives. Excellent tactical maneuvers.',
-      strengths: ['Aggressive offensive momentum', 'Solid status effect management'],
-      weaknesses: ['Vulnerable backline positioning'],
-      tacticalRecommendation: 'Invest in the Amber Gene Incubator to unlock secondary evolution abilities.',
-    });
-  }
-});
 
 // MVP Launch Feature Roadmap Endpoint
 app.get('/api/roadmap', (req, res) => {
@@ -157,7 +37,6 @@ app.get('/api/roadmap', (req, res) => {
           'Research-based evolution tree with 10 branch specializations (Deinonychus, Sky Titan, etc.)',
           'Prehistoric gathering, crafting system (Tranq Darts, Prime Kibble, Chitin Armor)',
           'Base building camp (Survivor Longhouse, Dino Enclosures, Gene Incubator, Smithy)',
-          'Gemini-powered dynamic NPC dialogue & tactical match coaching debriefing',
         ],
       },
       {

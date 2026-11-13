@@ -12,16 +12,15 @@ A browser-based tactical RPG with dinosaurs. Turn-based grid combat, dino taming
 - Server: `/api/*` — one handler (`api/_lib/app.ts`) run as a Vercel function in production and by `server.ts` (Express) in dev. Async PvP: players, games, turn timers, push.
 - Deploy: Vercel — static client plus one serverless function for `/api/*`. See [Deployment](#deployment).
 - Data: solo progress in localStorage; async PvP games in Supabase Postgres (`POSTGRES_URL`; in-memory when unset in dev). See `docs/async-multiplayer-spec.md`.
-- AI: Gemini API for NPC dialogue and match coaching (optional; canned fallback without a key)
 - Package manager: Bun (`bun.lock`)
 
 ## Quickstart
 
-Prerequisites: Bun, and `GEMINI_API_KEY` for the AI features — optional; the server falls back to canned replies without it.
+Prerequisites: Bun.
 
 ```sh
 bun install
-cp .env.example .env   # set GEMINI_API_KEY and APP_URL
+cp .env.example .env   # set the values you need (see the file's comments)
 bun run dev            # app + arena server on http://localhost:3000
 ```
 
@@ -31,7 +30,7 @@ Scripts: `dev` / `start` (`tsx server.ts`), `build` (`vite build`), `preview`, `
 
 ## Screens
 
-Base Camp, Island Campaign, Magitek Lab, Taming Expedition, Evolution Tree, Tactical Arena — plus NPC Dialogue, AI Feedback, Roadmap, and Multiplayer Lobby modals.
+Base Camp, Island Campaign, Magitek Lab, Taming Expedition, Evolution Tree, Tactical Arena — plus Roadmap and My Games (async PvP, local co-op and versus) modals.
 
 ## Combat (as built)
 

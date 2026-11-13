@@ -69,7 +69,7 @@ This doc is the gap list between that design and the scaffold as built (through 
 ### 8. AI features — keep or cut
 
 - GDD: no LLM features (only the removed Muse Sprite art note).
-- Code: Gemini NPC dialogue (`/api/npc-dialogue`, `gemini-2.5-flash`, canned fallback) and AI match coaching (`/api/match-feedback`, structured JSON debrief + grade).
+- Code (CUT 2026-11-13, no longer in the repo): Gemini NPC dialogue (`/api/npc-dialogue`, `gemini-2.5-flash`, canned fallback) and AI match coaching (`/api/match-feedback`, structured JSON debrief + grade).
 - Left: the keep-or-cut decision; if kept, a short spec (which NPCs, when coaching triggers, key-less fallback behavior is already built).
 - Recommendation: keep — it's built, it degrades gracefully without a key, and it fits the "guides" theme. Decide with the name call.
 
@@ -108,7 +108,7 @@ This doc is the gap list between that design and the scaffold as built (through 
 - Client: static Vite build, deploys to Vercel (install from `bun.lock`, build `vite build`, output `dist`).
 - Arena server: `server.ts` is a persistent Socket.io process and cannot run on Vercel's serverless functions. Split wired 2026-11-09: the client reads the arena URL from `VITE_ARENA_URL` (`src/lib/api.ts` — unset = same-origin); the server allows the Vercel origin via `ARENA_CORS_ORIGIN` (Socket.io + REST) and honors `process.env.PORT`.
 - Decided: **A split** — Vercel (client) + small always-on host (Fly.io / Render / Railway) for the arena server. **B managed realtime** and **C single host** rejected.
-- Left: pick the arena host; set `VITE_ARENA_URL` in the Vercel dashboard and `ARENA_CORS_ORIGIN` + `GEMINI_API_KEY` on the host. Gemini endpoints stay on the arena server for now; they are stateless and can move to Vercel serverless functions later.
+- Left: pick the arena host; set `VITE_ARENA_URL` in the Vercel dashboard and `ARENA_CORS_ORIGIN` on the host. (The Gemini endpoints that used to be here were cut 2026-11-13.)
 - **MVP note (2026-11-09): realtime multiplayer is NOT required for MVP — async multiplayer instead (long turn timer, notify the next player at end of turn). This may remove the need for a persistent Socket.io host entirely; the async turn design is an open item for the next session (see `docs/handoff.md`).**
 - See `docs/architecture.md` — Deployment.
 
