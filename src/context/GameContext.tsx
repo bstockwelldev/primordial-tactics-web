@@ -160,7 +160,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? JSON.parse(saved) : INITIAL_DINOS;
   });
   const [baseBuildings, setBaseBuildings] = useState<BaseBuilding[]>(BASE_BUILDINGS);
-  const [activeScreen, setActiveScreen] = useState<ActiveScreen>('base');
+  // First visit (no saved progress yet) opens on the arena, one click from a first battle;
+  // returning players land on their base. `pt_player_xp` is written by the sync effect below, after this runs.
+  const [activeScreen, setActiveScreen] = useState<ActiveScreen>(() =>
+    localStorage.getItem('pt_player_xp') === null ? 'arena' : 'base'
+  );
 
   // Modals state
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);

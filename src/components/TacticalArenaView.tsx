@@ -56,7 +56,11 @@ import {
   CheckCircle2,
   HelpCircle,
   Cpu,
+  ChevronDown,
+  X,
 } from 'lucide-react';
+
+const INTRO_SEEN_KEY = 'pt_seen_intro';
 
 export const TacticalArenaView: React.FC = () => {
   const {
@@ -126,6 +130,21 @@ export const TacticalArenaView: React.FC = () => {
   const [hoveredStatus, setHoveredStatus] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState('');
   const [floatingNotification, setFloatingNotification] = useState<string | null>(null);
+  const [showModesMenu, setShowModesMenu] = useState(false);
+  // First-visit "how a turn works" strip; dismissal is remembered per browser.
+  const [introDismissed, setIntroDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(INTRO_SEEN_KEY) === '1';
+    } catch {
+      return true;
+    }
+  });
+  const dismissIntro = () => {
+    setIntroDismissed(true);
+    try {
+      localStorage.setItem(INTRO_SEEN_KEY, '1');
+    } catch {}
+  };
 
   // The human side with a buddy and the default split, for the party setup screen.
   const buildPartyUnits = useCallback(
@@ -755,41 +774,84 @@ export const TacticalArenaView: React.FC = () => {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          {canOfferBuddy && (
-            <button
-              data-testid="play-with-buddy"
-              onClick={() => setShowPartySetup(true)}
-              className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-700 hover:bg-sky-600 text-white shadow cursor-pointer"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Play with a buddy</span>
-            </button>
-          )}
-          {canOfferVersus && (
-            <button
-              data-testid="play-versus"
-              onClick={() => {
-                let saved: VersusSave | null = null;
-                try {
-                  saved = readVersusSave(localStorage.getItem(VERSUS_SAVE_KEY));
-                } catch {}
-                if (saved && isResumable(saved) && !window.confirm('A Versus match is saved on this device. Starting a new one replaces it. Continue?')) return;
-                setShowVersusDraft(true);
-              }}
-              className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-700 hover:bg-rose-600 text-white shadow cursor-pointer"
-            >
-              <Swords className="w-3.5 h-3.5" />
-              <span>Versus</span>
-            </button>
-          )}
           {!currentRoom && !versus ? (
-            <button
-              onClick={() => setShowLobbyModal(true)}
-              className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white shadow cursor-pointer transition-transform hover:scale-105"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>PvP Duel</span>
-            </button>
+            <div className="relative">
+              <button
+                data-testid="more-modes"
+                aria-haspopup="menu"
+                aria-expanded={showModesMenu}
+                onClick={() => setShowModesMenu((open) => !open)}
+                className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-600/40 shadow cursor-pointer"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>More modes</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showModesMenu ? 'rotate-180' : ''}`} />
+              </button>
+              {showModesMenu && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowModesMenu(false)} aria-hidden="true" />
+                  <div
+                    role="menu"
+                    className="absolute left-0 sm:left-auto sm:right-0 z-40 mt-2 w-64 rounded-xl border border-stone-700 bg-stone-900 shadow-2xl p-1.5 space-y-1"
+                  >
+                    {canOfferBuddy && (
+                      <button
+                        role="menuitem"
+                        data-testid="play-with-buddy"
+                        onClick={() => {
+                          setShowModesMenu(false);
+                          setShowPartySetup(true);
+                        }}
+                        className="w-full text-left min-h-11 px-3 py-2 rounded-lg hover:bg-stone-800 cursor-pointer"
+                      >
+                        <span className="flex items-center gap-1.5 text-xs font-bold text-sky-300">
+                          <Users className="w-3.5 h-3.5" />
+                          Play with a buddy
+                        </span>
+                        <span className="block text-[11px] text-stone-400">Two people on this device vs the AI</span>
+                      </button>
+                    )}
+                    {canOfferVersus && (
+                      <button
+                        role="menuitem"
+                        data-testid="play-versus"
+                        onClick={() => {
+                          setShowModesMenu(false);
+                          let saved: VersusSave | null = null;
+                          try {
+                            saved = readVersusSave(localStorage.getItem(VERSUS_SAVE_KEY));
+                          } catch {}
+                          if (saved && isResumable(saved) && !window.confirm('A Versus match is saved on this device. Starting a new one replaces it. Continue?')) return;
+                          setShowVersusDraft(true);
+                        }}
+                        className="w-full text-left min-h-11 px-3 py-2 rounded-lg hover:bg-stone-800 cursor-pointer"
+                      >
+                        <span className="flex items-center gap-1.5 text-xs font-bold text-rose-300">
+                          <Swords className="w-3.5 h-3.5" />
+                          Versus
+                        </span>
+                        <span className="block text-[11px] text-stone-400">Two people on this device, best of two</span>
+                      </button>
+                    )}
+                    <button
+                      role="menuitem"
+                      data-testid="online-games"
+                      onClick={() => {
+                        setShowModesMenu(false);
+                        setShowLobbyModal(true);
+                      }}
+                      className="w-full text-left min-h-11 px-3 py-2 rounded-lg hover:bg-stone-800 cursor-pointer"
+                    >
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                        <Users className="w-3.5 h-3.5" />
+                        Online games
+                      </span>
+                      <span className="block text-[11px] text-stone-400">Play a friend or stranger by invite link</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           ) : versus ? null : (
             <button
               onClick={() => {
@@ -813,7 +875,16 @@ export const TacticalArenaView: React.FC = () => {
 
           {!currentRoom && (
           <button
-            onClick={() => (versus ? window.confirm('Quit this Versus match?') && quitVersus() : initSoloMatch())}
+            onClick={() => {
+              if (versus) {
+                if (window.confirm('Quit this Versus match?')) quitVersus();
+                return;
+              }
+              // Nothing to lose before the first action or once the match is decided.
+              const inProgress = !isMatchOver && (soloTurn > 1 || soloLogs.length > 1);
+              if (inProgress && !window.confirm('Reset this match? Progress in this battle is lost.')) return;
+              initSoloMatch();
+            }}
             className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -839,6 +910,27 @@ export const TacticalArenaView: React.FC = () => {
         <div className="p-3 bg-red-950/90 border border-red-500 text-red-200 text-xs font-semibold rounded-xl flex items-center gap-2 shadow-xl animate-bounce">
           <AlertTriangle className="w-4 h-4 text-red-400" />
           <span>{floatingNotification}</span>
+        </div>
+      )}
+
+      {!introDismissed && !currentRoom && !party && !versus && soloTurn === 1 && !isMatchOver && (
+        <div
+          data-testid="intro-strip"
+          className="p-3 rounded-xl border border-sky-800/60 bg-sky-950/40 text-xs text-sky-100 flex items-start gap-3"
+        >
+          <Info className="w-4 h-4 text-sky-300 shrink-0 mt-0.5" />
+          <p className="flex-1 leading-relaxed">
+            <span className="font-bold">How a turn works.</span> Each unit has 3 AP. Moving costs 1 AP per 2 tiles; attacks cost the AP on their button.
+            End your turn and the rivals act.
+          </p>
+          <button
+            data-testid="intro-dismiss"
+            onClick={dismissIntro}
+            aria-label="Dismiss"
+            className="min-h-11 min-w-11 -my-2 -mr-2 flex items-center justify-center rounded-lg text-sky-300 hover:bg-sky-900/50 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
