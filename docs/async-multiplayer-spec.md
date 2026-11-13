@@ -26,7 +26,7 @@ Status: **locked 2026-11-10 and built** on branch `claude/amazing-cerf-7db9o5`. 
 | 5 | PvP squads | Fixed default squads (as today). Own-roster PvP waits for cloud save. |
 | 6 | PvE | No server. Client-side solo path stays; an in-progress solo match is saved to localStorage and listed in "My Games" as resumable. |
 | 7 | Campaign | Solo progress, not async. Cloud save is a later item that reuses the same identity and database. |
-| 8 | AI features | Set aside. The Gemini endpoints are not ported in this work; a follow-up pass decides the provider. |
+| 8 | AI features | Set aside, then CUT 2026-11-13: the Gemini endpoints were never ported and were removed. |
 
 Still open (not decided here): the name (Primordial vs Primal).
 
@@ -129,7 +129,7 @@ Caps: 10 active games per player; action log trimmed to the last 200 entries.
 - `vercel.json`: functions under `api/`, SPA rewrite narrowed so it no longer swallows `/api/*`, one cron entry.
 - Env (Vercel): `POSTGRES_URL` (injected by connecting the Supabase database to the Vercel project), `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:` address), `CRON_SECRET`. Generate VAPID keys with `bunx web-push generate-vapid-keys`.
 - `server.ts` remains the local dev server and mounts the same handler functions, so dev and production run one code path. The Socket.io handlers are deleted from `server.ts` (git history keeps them for the deferred realtime work); `socket.io` / `socket.io-client` are dropped. `VITE_ARENA_URL` / `ARENA_CORS_ORIGIN` become unused and are removed.
-- The Gemini endpoints stay in `server.ts` (local dev only) until the AI follow-up. On Vercel the client's existing failure paths apply: no debrief modal, NPC fallback line.
+- The Gemini endpoints were in `server.ts` (local dev only) and were removed 2026-11-13. (This line used to claim Vercel showed no debrief modal; it actually showed a placeholder one.)
 
 ## Build order
 

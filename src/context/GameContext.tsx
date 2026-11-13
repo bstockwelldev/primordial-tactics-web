@@ -77,16 +77,10 @@ interface GameContextType {
   setVersusResumeRequested: (v: boolean) => void;
 
   // Modals
-  activeNpcModal: string | null;
-  setActiveNpcModal: (npcId: string | null) => void;
   showRoadmapModal: boolean;
   setShowRoadmapModal: (show: boolean) => void;
   showLobbyModal: boolean;
   setShowLobbyModal: (show: boolean) => void;
-  showDebriefModal: boolean;
-  setShowDebriefModal: (show: boolean) => void;
-  lastMatchSummary: any | null;
-  setLastMatchSummary: (summary: any | null) => void;
 
   // Actions
   addResources: (res: Partial<PrehistoricResources>) => void;
@@ -169,11 +163,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [activeScreen, setActiveScreen] = useState<ActiveScreen>('base');
 
   // Modals state
-  const [activeNpcModal, setActiveNpcModal] = useState<string | null>(null);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
   const [showLobbyModal, setShowLobbyModal] = useState(false);
-  const [showDebriefModal, setShowDebriefModal] = useState(false);
-  const [lastMatchSummary, setLastMatchSummary] = useState<any | null>(null);
 
   // Async multiplayer state
   const [myPlayerId, setMyPlayerId] = useState<string | null>(() => asyncApi.getIdentity()?.playerId ?? null);
@@ -602,27 +593,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (won && activeSectorMission && !pvpGameId) {
       liberateSector(activeSectorMission.id);
     }
-
-    // Request AI Debrief
-    try {
-      const res = await fetch(apiUrl('/api/match-feedback'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          winnerName: won ? playerName : 'Opponent',
-          loserName: won ? 'Opponent' : playerName,
-          turns,
-          actionLogs: logs,
-          playerWon: won,
-          sectorName: activeSectorMission?.sectorName,
-        }),
-      });
-      const debrief = await res.json();
-      setLastMatchSummary(debrief);
-      setShowDebriefModal(true);
-    } catch (err) {
-      console.warn('Failed to fetch AI feedback:', err);
-    }
   };
 
   return (
@@ -666,16 +636,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearPendingInvite,
         versusResumeRequested,
         setVersusResumeRequested,
-        activeNpcModal,
-        setActiveNpcModal,
         showRoadmapModal,
         setShowRoadmapModal,
         showLobbyModal,
         setShowLobbyModal,
-        showDebriefModal,
-        setShowDebriefModal,
-        lastMatchSummary,
-        setLastMatchSummary,
         addResources,
         craftItem,
         upgradeBuilding,

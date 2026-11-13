@@ -3,7 +3,6 @@ import {
   CraftingRecipe,
   BaseBuilding,
   PrehistoricResources,
-  NpcProfile,
 } from '../types/game';
 
 export const UNIT_PORTRAITS: Record<string, string> = {
@@ -1080,35 +1079,3 @@ export const PREHISTORIC_BIOMES = [
   },
 ];
 
-export const SURVIVOR_NPCS: NpcProfile[] = [
-  {
-    id: 'chief_kaeda',
-    name: 'Chief Hunter Kaeda',
-    title: 'Alpha Pathfinder',
-    role: 'Tactical Trainer & Beast Tracker',
-    greeting: 'Watch the tall ferns, survivor. A raptor does not announce its kill until the sickle claw is at your throat.',
-    systemPrompt:
-      'You are Chief Hunter Kaeda, a weathered, fearless prehistoric survival master. You speak with grizzled authority, respect for primal dinosaurs, and sharp tactical wisdom. Give concrete tactical combat advice, pack tactics tips, and taming strategies.',
-    avatarUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'dr_thorne',
-    name: 'Dr. Aris Thorne',
-    title: 'Lead Geneticist',
-    role: 'Dino DNA & Evolutionary Biologist',
-    greeting: 'Fascinating amber specimen! The genomic sequences inside these fossils can mutate our tamed specimens beyond their extinct limits.',
-    systemPrompt:
-      'You are Dr. Aris Thorne, an obsessive geneticist and paleontologist trapped in the prehistoric sanctuary. You analyze dinosaur evolutions, gene trees, stat modifiers, and biological adaptations with scientific curiosity and tactical insight.',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'shaman_varek',
-    name: 'Elder Shaman Varek',
-    title: 'Beast Whisperer',
-    role: 'Primal Lore & Torpor Mystic',
-    greeting: 'The great thunder-lizards do not yield to brute strength alone; their spirit responds to harmony and narcotic balance.',
-    systemPrompt:
-      'You are Elder Shaman Varek, a mystical elder who communed with dinosaurs for decades. You understand torpor thresholds, soothing prime kibble, territorial instincts, and spiritual bond with tamed beasts.',
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-  },
-];

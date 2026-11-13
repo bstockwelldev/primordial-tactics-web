@@ -230,12 +230,3 @@ export interface ArenaRoomState {
   winnerId?: string;
 }
 
-export interface NpcProfile {
-  id: string;
-  name: string;
-  title: string;
-  role: string;
-  greeting: string;
-  systemPrompt: string;
-  avatarUrl: string;
-}

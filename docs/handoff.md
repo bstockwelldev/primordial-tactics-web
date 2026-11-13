@@ -18,7 +18,7 @@ Consequence: the persistent Socket.io arena server may be unnecessary for MVP. T
 
 ## Current state
 
-- **Repo:** `bstockwelldev/primordial-tactics-web` (public, `main`). Scaffold is a full AI Studio app, not a skeleton: 6 screens (Base Camp, Island Campaign, Magitek Lab, Taming Expedition, Evolution Tree, Tactical Arena) + 4 modals (NPC Dialogue, AI Feedback, Roadmap, Multiplayer Lobby), Express + Socket.io arena server (`server.ts`, 8×6 grid, AP economy, 45s turns), Gemini NPC/coaching hooks.
+- **Repo:** `bstockwelldev/primordial-tactics-web` (public, `main`). Scaffold is a full AI Studio app, not a skeleton: 6 screens (Base Camp, Island Campaign, Magitek Lab, Taming Expedition, Evolution Tree, Tactical Arena) + modals (Roadmap, My Games), Express + Socket.io arena server (`server.ts`, 8×6 grid, AP economy, 45s turns). The Gemini NPC chat and match debrief were cut 2026-11-13 (owner decision; they only ran on the local dev server, returned 401 on production and showed a placeholder debrief after every match). No LLM features remain; add one only with auth, a rate limit and a server route in `api/`.
 - **Main moves; run `git log` before trusting any commit id.** The versus work (#26-#30) was merged on 2026-11-13. The last production deploy checked was of `9c539ac` (`dpl_JBqwraou…`, READY); the co-op and versus work has not been deployed or verified on production.
 - **PR #1, #2, #3 MERGED** (Vercel split wiring, handoff doc, handoff update).
 - **PR #4 MERGED 2026-11-10:** async multiplayer (engine, API, Postgres store, My Games, push, timers), state-machine bot, single campaign payout.
@@ -48,11 +48,10 @@ Consequence: the persistent Socket.io arena server may be unnecessary for MVP. T
 |---|---|---|
 | `VITE_ARENA_URL` | Vercel dashboard (client) | Public URL of the arena server, e.g. `https://primordial-tactics-arena.fly.dev`. Unset = same-origin. Set once the arena host exists. |
 | `ARENA_CORS_ORIGIN` | Arena host (server) | Comma-separated allow-list of client origins, e.g. the Vercel domain. Unset = `*` (dev default — tighten in production). |
-| `GEMINI_API_KEY` | Arena host (server) | Gemini for NPC dialogue + match debrief. Unset = canned fallback replies. |
 | `PORT` | Arena host (server) | Assigned by the host; server defaults to 3000. |
 | `APP_URL` | (legacy, `.env.example`) | AI Studio artifact; not used by the Vercel deployment. |
 
-`.env.example` still carries AI Studio comments and a redacted `GEMINI_API_KEY` value — refresh it when the arena host is chosen; do not copy the redacted value.
+`.env.example` still carries AI Studio comments; refresh it when convenient.
 
 ## Async multiplayer — built 2026-11-10, merged and live
 
