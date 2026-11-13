@@ -72,6 +72,9 @@ interface GameContextType {
   sendGameAction: (action: GameAction) => Promise<string | null>;
   pendingInviteId: string | null;
   clearPendingInvite: () => void;
+  /** My Games asked the arena to resume the saved local versus match. The arena clears it once it has. */
+  versusResumeRequested: boolean;
+  setVersusResumeRequested: (v: boolean) => void;
 
   // Modals
   activeNpcModal: string | null;
@@ -183,6 +186,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [pendingInviteId, setPendingInviteId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('game')
   );
+  const [versusResumeRequested, setVersusResumeRequested] = useState(false);
   const asyncGameRef = useRef(asyncGame);
   asyncGameRef.current = asyncGame;
 
@@ -660,6 +664,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendGameAction,
         pendingInviteId,
         clearPendingInvite,
+        versusResumeRequested,
+        setVersusResumeRequested,
         activeNpcModal,
         setActiveNpcModal,
         showRoadmapModal,
