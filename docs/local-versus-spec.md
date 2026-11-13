@@ -1,6 +1,6 @@
 # Local versus (pass & play) — spec
 
-Status: **LOCKED 2026-11-13** with the section 9 defaults, as chosen by Brandon. Nothing is built. Two items stay open by design and are settled with data, not opinion: the first-mover compensation knob (Q3, slice 2, after a human playtest) and the exact template multipliers (slice 2). This is the milestone Brandon set after local co-op (`docs/local-coop-spec.md`, built and merged): two people on one device, each drafts a side from a common level-balanced pool so the field is even. **For fun only: it never touches campaign progression, XP, loot, saved rosters or the solo save.**
+Status: **LOCKED 2026-11-13** with the section 9 defaults, as chosen by Brandon, and **BUILT (slices 1-4 merged, PRs #27-#30)**; each slice's *As built* note is below. Still open, and settled by a human playtest rather than more bot tuning: the squad-combination imbalance (section 10) and the template multipliers. This is the milestone Brandon set after local co-op (`docs/local-coop-spec.md`, built and merged): two people on one device, each drafts a side from a common level-balanced pool so the field is even. **For fun only: it never touches campaign progression, XP, loot, saved rosters or the solo save.**
 
 The GDD is the authority for mechanics and theme; it does not describe a versus mode, so this is a new mechanic (record it there only if Brandon wants).
 
@@ -101,7 +101,7 @@ A match in progress can be saved so a reload resumes it, but it is stored under 
 2. **Balance:** first-mover fix chosen by data, template tuning to 45-55%, versus table in `docs/balance.md`. May be re-run after the playtest.
 3. **Draft and play UI:** entry, draft screen with blind picks and handoff, in-play banner and chips for two human sides, result screen, no payout.
 4. **Persistence:** `pt_versus_match`, resume with handoff, My Games entry.
-5. **Docs:** handoff update and the GDD note if Brandon wants it.
+5. **Docs:** handoff update (done) and the GDD note if Brandon wants it (not done: the GDD does not describe versus).
 
 *As built (slice 3, 2026-11-13):* a "Versus" button beside "Play with a buddy" (fresh skirmish only, never from a campaign sector) opens `VersusDraft`: names, Player 1 picks, a full-screen pass screen that shows none of the picks, Player 2 picks, then both squads and a coin flip are revealed together. Picks live only in component state (checked: `localStorage` is byte-identical through the whole draft). The match is the best of two (`src/game/versusSeries.ts`, pure and tested): game 1 puts the coin-flip winner on side A, game 2 swaps sides, `VersusResult` shows the hand-over to game 2 and then the pair result with Rematch / New draft / Quit. In play, the co-op banner, handoff overlay and inspect-only gating are reused, tokens are emerald and sky (no red), End Turn reads "End <Name>'s turn", and the round limit (25) ends a game after both sides finish round 25. Versus never calls `recordMatchResult` (no XP, loot, liberation) and never writes `pt_solo_match`; persistence is slice 4, so a reload mid-versus currently returns to the skirmish. Browser-verified at desktop and 375px: pass-only game to the limit (draw), a real fight to a wipeout (round 5), game 2 with swapped sides, pair result, XP untouched.
 
