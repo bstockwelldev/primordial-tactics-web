@@ -1,6 +1,6 @@
 # Local co-op / pass & play on the campaign — spec
 
-Status: **LOCKED 2026-11-12** with the section 9 defaults, as chosen by Brandon. Nothing is built yet. Not yet confirmed: that pass & play (both people at one screen) is what Brandon wants rather than online co-op (see risks); the lock assumes it is. The GDD is the authority for mechanics and theme: it describes one player leading a character and companions, so this new mechanic should be recorded there (slice 5) if Brandon agrees.
+Status: **LOCKED 2026-11-12** with the section 9 defaults, as chosen by Brandon. **Built 2026-11-13 in slices 1-4 (PRs #20, #22, #23, #24); this file records where the build differs from the plan (marked *As built*).** Not yet confirmed: that pass & play (both people at one screen) is what Brandon wants rather than online co-op (see risks); the lock assumes it is. The GDD is the authority for mechanics and theme: it describes one player leading a character and companions, so this new mechanic should be recorded there (slice 5) if Brandon agrees.
 
 ## 1. Goal
 
@@ -50,10 +50,10 @@ The buddy gets a guest commander, a second Human-class unit built like the playe
 
 ### 3.4 Difficulty
 
-A party of 4 against a 2-3 unit enemy squad is much easier. Enemy strength is therefore scaled for co-op by one knob, `BALANCE.coopEnemyScale` (stats multiplier), set with the existing simulator, not guessed:
+A party of 4 against a 2-3 unit enemy squad is much easier. Enemy strength is therefore scaled for co-op by a stats multiplier, set with the existing simulator, not guessed. *As built:* one knob did not work (the 70% win point runs from about x1.1 to x1.7 across sectors), so it is a per-sector table, `COOP_SECTOR_SCALE` in `src/game/balance.ts`, with `BALANCE.coopEnemyScale` (x1.2) as the fallback for skirmish. Brandon chose the per-sector table on 2026-11-13. Plan as written:
 - `src/game/sim.ts` plays a mission with the bot on both sides; extend it so the human side can be two bot-controlled slots.
 - `npm run balance` gets a co-op table: per sector, win rate at the expected level, same method as today (Wilson 95% intervals).
-- Target: 55-85% per campaign sector at the expected level with two moderate bots. The knob is tuned until every sector is in that band, and `docs/balance.md` records the result. A human pair will usually beat a bot pair, so the band is a floor, not a promise.
+- Target: 55-85% per campaign sector at the expected level with two moderate bots. The knob is tuned until every sector is in that band, and `docs/balance.md` records the result. *As built:* 11 of 12 sectors are in the band; `sector_primoris_1` is a documented exception (its win rate jumps from 92% to 50% between x1.656 and x1.657, and it starts liberated). A human pair will usually beat a bot pair, so the band is a floor, not a promise.
 
 ### 3.5 Rewards and progression
 
@@ -84,6 +84,8 @@ party?: {
   phase: 'party' | 'enemy';
 }
 ```
+
+*As built:* the shape is simpler, `party?: { names: [string, string]; slot: 0 | 1 }`. The enemy phase needs no field: it is the `isPlayerTurn: false` flag that solo saves already have, and `readSoloSave` (`src/game/soloSave.ts`) rejects a save whose units have controllers but whose party is missing or malformed.
 
 and units gain an optional `controller?: 0 | 1`. Absent means a solo save, so every existing save loads unchanged (back-compat is an acceptance criterion). Resuming a co-op save restores the active slot and shows the handoff overlay for it. Closing the app mid enemy phase works as today (the bot finishes).
 
@@ -120,6 +122,8 @@ and units gain an optional `controller?: 0 | 1`. Absent means a solo save, so ev
 3. **Handoff and persistence:** handoff overlay, `SoloSave.party`, resume, mid-phase reload.
 4. **Balance:** simulator support for two bot slots, `coopEnemyScale`, co-op table in `docs/balance.md`.
 5. **Handoff doc:** update `docs/handoff.md` and the GDD note if Brandon wants the mechanic recorded there.
+
+*As built:* slice 2 also carried `SoloSave.party` and resume (it was needed to survive a reload), so slice 3 shrank to the handoff overlay, the resume prompt and the validated save parse. Slice 5 updated `docs/handoff.md` only; the GDD note was not added (Brandon's call).
 
 Slices 1 and 4 can be developed in parallel; 2 and 3 depend on 1.
 
