@@ -21,6 +21,7 @@ import { createRng, newSeed } from '../game/rng';
 import type { GameAction } from '../game/engine';
 import { timeLeft } from '../lib/asyncApi';
 import { SOLO_SAVE_KEY, SoloSave, readSoloSave } from '../game/soloSave';
+import { VERSUS_SAVE_KEY, VersusSave, isResumable, readVersusSave } from '../game/versusSave';
 import { PartyPhase, Slot, canControl, controllerOf, firstPhase, handoffNeeded, nextPhase, refreshApFor } from '../game/party';
 import { VersusSeries, boardWinner, gameResult, limitWinner, namesBySlot, nextGame, recordGame, rematch, roundLimitReached, unitsForGame } from '../game/versusSeries';
 import { VersusDraft } from './VersusDraft';
@@ -72,6 +73,8 @@ export const TacticalArenaView: React.FC = () => {
     activeSectorMission,
     clearActiveSectorMission,
     setActiveScreen,
+    versusResumeRequested,
+    setVersusResumeRequested,
   } = useGame();
 
   // Helper to resolve high-res token portrait for any unit
@@ -201,7 +204,7 @@ export const TacticalArenaView: React.FC = () => {
 
   // Keep the in-progress solo match on this device so it can be resumed from My Games.
   useEffect(() => {
-    // A versus match never touches the campaign's save (its own persistence is a later slice).
+    // A versus match never touches the campaign's save: it has its own key (see the effect below).
     if (hasRoom || !isSoloMode || soloUnits.length === 0 || versus) return;
     if (soloWinner) {
       localStorage.removeItem(SOLO_SAVE_KEY);
@@ -217,6 +220,49 @@ export const TacticalArenaView: React.FC = () => {
     };
     localStorage.setItem(SOLO_SAVE_KEY, JSON.stringify(save));
   }, [hasRoom, isSoloMode, soloUnits, soloLogs, soloTurn, soloIsPlayerTurn, soloWinner, party, versus]);
+
+  // Keep a local versus match on this device under its own key. A finished pair has nothing left to resume.
+  useEffect(() => {
+    if (hasRoom || !versus || soloUnits.length === 0 || !party) return;
+    const over = !!soloWinner;
+    try {
+      if (over && versus.results.length === 2) {
+        localStorage.removeItem(VERSUS_SAVE_KEY);
+        return;
+      }
+      const save: VersusSave = { mode: 'versus', series: versus, units: soloUnits, logs: soloLogs.slice(-100), turn: soloTurn, slot: party.slot, over, endedBy: versusEnd };
+      localStorage.setItem(VERSUS_SAVE_KEY, JSON.stringify(save));
+    } catch {}
+  }, [hasRoom, versus, soloUnits, soloLogs, soloTurn, party, soloWinner, versusEnd]);
+
+  // Resume a saved versus match when My Games asked for it. Whoever picks the device up confirms with the handoff.
+  useEffect(() => {
+    if (!versusResumeRequested) return;
+    setVersusResumeRequested(false);
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(VERSUS_SAVE_KEY);
+    } catch {}
+    const save = readVersusSave(raw);
+    if (!save || !isResumable(save)) return;
+    soloUnitsRef.current = save.units;
+    soloTurnRef.current = save.turn;
+    soloRngRef.current = createRng(newSeed());
+    setIsSoloMode(true);
+    setVersus(save.series);
+    setVersusEnd(save.endedBy);
+    setShowVersusDraft(false);
+    setSoloUnits(save.units);
+    setSoloLogs(save.logs);
+    setSoloTurn(save.turn);
+    setSoloIsPlayerTurn(true);
+    setSoloWinner(save.over ? 'versus_over' : null);
+    setParty({ names: namesBySlot(save.series), slot: save.slot });
+    setSelectedUnitId(firstUnitOf(save.units, save.slot));
+    setSelectedAbilityId(null);
+    setInspectedUnitOverrideId(null);
+    setHandoffTo(save.over ? null : save.slot);
+  }, [versusResumeRequested]);
 
   // Derived Active Match State
   const activeUnits = currentRoom ? currentRoom.units : soloUnits;
@@ -515,6 +561,14 @@ export const TacticalArenaView: React.FC = () => {
     }
   };
 
+  // Versus: abandon the match for good, including its saved copy (only the player's own choices call this).
+  const quitVersus = () => {
+    try {
+      localStorage.removeItem(VERSUS_SAVE_KEY);
+    } catch {}
+    initSoloMatch();
+  };
+
   // Versus: set up game `series.game` of the pair on the plain arena, side A to move.
   const beginVersusGame = (series: VersusSeries) => {
     const units = unitsForGame(series);
@@ -714,7 +768,14 @@ export const TacticalArenaView: React.FC = () => {
           {canOfferVersus && (
             <button
               data-testid="play-versus"
-              onClick={() => setShowVersusDraft(true)}
+              onClick={() => {
+                let saved: VersusSave | null = null;
+                try {
+                  saved = readVersusSave(localStorage.getItem(VERSUS_SAVE_KEY));
+                } catch {}
+                if (saved && isResumable(saved) && !window.confirm('A Versus match is saved on this device. Starting a new one replaces it. Continue?')) return;
+                setShowVersusDraft(true);
+              }}
               className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-700 hover:bg-rose-600 text-white shadow cursor-pointer"
             >
               <Swords className="w-3.5 h-3.5" />
@@ -752,7 +813,7 @@ export const TacticalArenaView: React.FC = () => {
 
           {!currentRoom && (
           <button
-            onClick={() => (!versus || window.confirm('Quit this Versus match?')) && initSoloMatch()}
+            onClick={() => (versus ? window.confirm('Quit this Versus match?') && quitVersus() : initSoloMatch())}
             className="flex items-center gap-1.5 min-h-11 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -1193,10 +1254,10 @@ export const TacticalArenaView: React.FC = () => {
                     onNextGame={() => beginVersusGame(nextGame(versus))}
                     onRematch={() => beginVersusGame(rematch(versus, Math.random() < 0.5 ? 0 : 1))}
                     onNewDraft={() => {
-                      initSoloMatch();
+                      quitVersus();
                       setShowVersusDraft(true);
                     }}
-                    onQuit={initSoloMatch}
+                    onQuit={quitVersus}
                   />
                 ) : (
                 <>

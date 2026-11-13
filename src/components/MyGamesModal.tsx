@@ -4,6 +4,8 @@ import { describeFailure, getGame, renamePlayer, timeAgo, timeLeft, GameSummary 
 import { enablePush, getPushState, PushState } from '../lib/push';
 import { ISLAND_CAMPAIGN_SECTORS } from '../game/constants';
 import { SOLO_SAVE_KEY, SoloSave, readSoloSave } from '../game/soloSave';
+import { namesBySlot } from '../game/versusSeries';
+import { VERSUS_SAVE_KEY, VersusSave, isResumable, readVersusSave } from '../game/versusSave';
 import { Users, X, Swords, Bell, Link2, Hourglass, Trophy, Plus, Cpu, Lock } from 'lucide-react';
 
 const TURN_OPTIONS = [
@@ -20,6 +22,8 @@ const PUSH_COPY: Record<PushState, string> = {
   'needs-install': 'On iPhone and iPad, add this page to your Home Screen (Share → Add to Home Screen) to get turn notifications.',
   unconfigured: 'Notifications are not set up on this server yet. Your games still show here when it is your turn.',
 };
+
+const namesFor = (v: VersusSave): [string, string] => namesBySlot(v.series);
 
 export const MyGamesModal: React.FC = () => {
   const {
@@ -45,6 +49,7 @@ export const MyGamesModal: React.FC = () => {
     startSectorMission,
     clearActiveSectorMission,
     campaignSectors,
+    setVersusResumeRequested,
   } = useGame();
 
   const [visibility, setVisibility] = useState<'open' | 'invite'>('open');
@@ -55,6 +60,7 @@ export const MyGamesModal: React.FC = () => {
   const [invite, setInvite] = useState<GameSummary | null>(null);
   const [push, setPush] = useState<PushState>('off');
   const [soloSave, setSoloSave] = useState<SoloSave | null>(null);
+  const [versusSave, setVersusSave] = useState<VersusSave | null>(null);
   const [nameDraft, setNameDraft] = useState(playerName);
   const [newPassword, setNewPassword] = useState('');
   // Which locked game is asking for a password right now, and what has been typed.
@@ -73,6 +79,12 @@ export const MyGamesModal: React.FC = () => {
       setSoloSave(readSoloSave(localStorage.getItem(SOLO_SAVE_KEY)));
     } catch {
       setSoloSave(null);
+    }
+    try {
+      const v = readVersusSave(localStorage.getItem(VERSUS_SAVE_KEY));
+      setVersusSave(v && isResumable(v) ? v : null);
+    } catch {
+      setVersusSave(null);
     }
   }, [showLobbyModal]);
 
@@ -173,6 +185,15 @@ export const MyGamesModal: React.FC = () => {
       clearActiveSectorMission();
       setActiveScreen('arena');
     }
+    setShowLobbyModal(false);
+  };
+
+  const resumeVersus = () => {
+    if (!versusSave) return;
+    setCurrentRoom(null);
+    clearActiveSectorMission();
+    setActiveScreen('arena');
+    setVersusResumeRequested(true);
     setShowLobbyModal(false);
   };
 
@@ -332,6 +353,23 @@ export const MyGamesModal: React.FC = () => {
                   </p>
                 </div>
                 <button className={quietBtn} onClick={resumeSolo}>Resume</button>
+              </div>
+            </Section>
+          )}
+
+          {versusSave && (
+            <Section title="Versus (this device)" icon={<Swords className="w-3.5 h-3.5 text-rose-400" />} count={1}>
+              <div className={row} data-testid="versus-save-row">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-stone-100 truncate">
+                    {versusSave.series.names[0]} vs {versusSave.series.names[1]}
+                  </p>
+                  <p className="text-xs text-stone-400">
+                    Game {versusSave.series.game} of 2 · Round {versusSave.turn}
+                    {versusSave.over ? ' · game finished' : ` · ${namesFor(versusSave)[versusSave.slot]}'s turn`} · saved on this device
+                  </p>
+                </div>
+                <button className={quietBtn} onClick={resumeVersus} data-testid="versus-resume">Resume</button>
               </div>
             </Section>
           )}
