@@ -5,8 +5,9 @@ import { DINOSAUR_SPECIES } from './constants';
 import { BOT_PROFILES, runBotTurn } from './bot';
 import { createRng } from './rng';
 import { hasBots, isBotControlled, livingSlots, nextPhase, refreshApFor } from './party';
-import { simulateMatch } from './sim';
-import { SQUAD_SIZE, VERSUS_TEMPLATE_IDS, buildVersusUnits, isVersusMatch, randomSquad, roundLimitWinner, validatePicks } from './versus';
+import { simulateMatch, simulatePair } from './sim';
+import { SQUAD_SIZE, VERSUS_TEMPLATE_IDS, buildVersusUnits, isVersusMatch, randomSquad, roundLimitWinner, scorePair, validatePicks } from './versus';
+import { VERSUS_TEMPLATE_SCALE } from './balance';
 import type { UnitEntity } from '../types/game';
 
 const A = ['velociraptor', 'triceratops', 'commander'];
@@ -41,15 +42,23 @@ test('buildVersusUnits: two human sides on a mirrored layout, species base stats
   assert.deepEqual(b, a);
   const grid = buildArenaGrid();
   for (const u of units) assert.notEqual(grid.find((t) => t.x === u.x && t.y === u.y)?.type, 'water', `${u.id} starts on land`);
-  // species stats at the level-5 baseline with the (currently neutral) tuning
+  // species stats at the level-5 baseline, with the tuned multipliers
   const raptor = units.find((u) => u.id === 'versus_a_velociraptor')!;
-  assert.deepEqual([raptor.maxHp, raptor.attack, raptor.defense, raptor.speed], [160, 48, 16, 4]);
+  const r = VERSUS_TEMPLATE_SCALE.velociraptor;
+  assert.deepEqual(
+    [raptor.maxHp, raptor.attack, raptor.defense, raptor.speed],
+    [Math.round(160 * r.hp), Math.round(48 * r.attack), Math.round(16 * r.defense), 4]
+  );
   assert.equal(raptor.hp, raptor.maxHp);
   assert.equal(raptor.name, DINOSAUR_SPECIES.velociraptor.name);
-  // the commander matches the campaign commander at level 5
+  // the commander is the campaign commander at level 5, with its tuning
   const cmd = units.find((u) => u.id === 'versus_a_commander')!;
   const campaign = buildSoloUnits('X', [], null).find((u) => u.id === 'player_hero')!;
-  assert.deepEqual([cmd.maxHp, cmd.attack, cmd.defense, cmd.unitClass], [campaign.maxHp, campaign.attack, campaign.defense, campaign.unitClass]);
+  const c = VERSUS_TEMPLATE_SCALE.commander;
+  assert.deepEqual(
+    [cmd.maxHp, cmd.attack, cmd.defense, cmd.unitClass],
+    [Math.round(campaign.maxHp * c.hp), Math.round(campaign.attack * c.attack), Math.round(campaign.defense * c.defense), campaign.unitClass]
+  );
   // a template picked by both sides does not share ability objects
   const mirror = buildVersusUnits(A, A);
   assert.notEqual(
@@ -144,4 +153,33 @@ test('randomSquad: always a legal squad, deterministic per rng', () => {
   const rng = createRng(9);
   for (let i = 0; i < 200; i++) assert.equal(validatePicks(randomSquad(rng)), null);
   assert.deepEqual(randomSquad(createRng(4)), randomSquad(createRng(4)));
+});
+
+test('scorePair: more game wins takes the pair; one each goes to the larger HP-share margin; equal is a draw', () => {
+  const g = (winner: 'a' | 'b' | 'draw', margin: number) => ({ winner, margin });
+  assert.deepEqual(scorePair([g('a', 0.8), g('a', 0.5)]), { winner: 'a', aWins: 2, bWins: 0 });
+  assert.deepEqual(scorePair([g('b', -0.8), g('a', 0.2)]), { winner: 'b', aWins: 1, bWins: 1 });
+  assert.deepEqual(scorePair([g('a', 0.9), g('b', -0.2)]), { winner: 'a', aWins: 1, bWins: 1 });
+  assert.deepEqual(scorePair([g('a', 0.5), g('b', -0.5)]), { winner: 'draw', aWins: 1, bWins: 1 });
+  assert.deepEqual(scorePair([g('draw', 0), g('a', 0.3)]), { winner: 'a', aWins: 1, bWins: 0 });
+  assert.deepEqual(scorePair([g('draw', 0), g('draw', 0)]), { winner: 'draw', aWins: 0, bWins: 0 });
+});
+
+test('simulatePair: deterministic, each player moves first once, and a passive side loses both games', () => {
+  const grid = buildArenaGrid();
+  const opts = { picksA: A, picksB: B, grid, seed: 8, a: BOT_PROFILES.moderate, b: BOT_PROFILES.moderate };
+  assert.deepEqual(simulatePair(opts), simulatePair(opts));
+  assert.deepEqual(simulatePair({ ...opts, b: 'passive' }), { winner: 'a', aWins: 2, bWins: 0 });
+  assert.deepEqual(simulatePair({ ...opts, a: 'passive' }), { winner: 'b', aWins: 0, bWins: 2 });
+});
+
+test('template tuning: every template has a sane multiplier, and nothing outside the pool', () => {
+  assert.deepEqual(Object.keys(VERSUS_TEMPLATE_SCALE).sort(), [...VERSUS_TEMPLATE_IDS].sort());
+  for (const [id, m] of Object.entries(VERSUS_TEMPLATE_SCALE)) {
+    for (const v of [m.hp, m.attack, m.defense]) assert.ok(v >= 0.5 && v <= 2, `${id} multiplier ${v}`);
+  }
+  // the tuning is applied: dilophosaurus is boosted, triceratops trimmed, relative to the species table
+  const units = buildVersusUnits(['dilophosaurus', 'triceratops', 'commander'], B);
+  assert.equal(units.find((u) => u.id === 'versus_a_dilophosaurus')!.maxHp, Math.round(DINOSAUR_SPECIES.dilophosaurus.baseHp * VERSUS_TEMPLATE_SCALE.dilophosaurus.hp));
+  assert.ok(units.find((u) => u.id === 'versus_a_triceratops')!.maxHp < DINOSAUR_SPECIES.triceratops.baseHp);
 });
