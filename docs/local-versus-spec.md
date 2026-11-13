@@ -1,6 +1,6 @@
 # Local versus (pass & play) — spec
 
-Status: **DRAFT 2026-11-13, not locked.** Section 9 lists the defaults I recommend; none is decided until Brandon says so. Nothing is built. This is the milestone Brandon set after local co-op (`docs/local-coop-spec.md`, built and merged): two people on one device, each drafts a side from a common level-balanced pool so the field is even. **For fun only: it never touches campaign progression, XP, loot, saved rosters or the solo save.**
+Status: **LOCKED 2026-11-13** with the section 9 defaults, as chosen by Brandon. Nothing is built. Two items stay open by design and are settled with data, not opinion: the first-mover compensation knob (Q3, slice 2, after a human playtest) and the exact template multipliers (slice 2). This is the milestone Brandon set after local co-op (`docs/local-coop-spec.md`, built and merged): two people on one device, each drafts a side from a common level-balanced pool so the field is even. **For fun only: it never touches campaign progression, XP, loot, saved rosters or the solo save.**
 
 The GDD is the authority for mechanics and theme; it does not describe a versus mode, so this is a new mechanic (record it there only if Brandon wants).
 
@@ -110,13 +110,13 @@ Slices 1 and 2 first, since the pool and the first-mover fix decide whether the 
 - Larger pools, map choice, team sizes other than 3, a points-based draft.
 - Seasons, ladders, unlockable templates (would break "for fun only").
 
-## 9. Decisions (proposed; none locked until Brandon says so)
+## 9. Decisions (locked 2026-11-13; the Recommended default column is the decision)
 
 | # | Question | Recommended default |
 |---|---|---|
 | Q1 | Draft format | Blind simultaneous pick of 3 distinct templates from a shared pool of 6 |
 | Q2 | Level balancing | Fixed level-5 stats times a tuned per-template multiplier; no saved stats or equipment |
-| Q3 | First-mover fairness | One tuned compensation knob proven in the sim (round-1 AP or deployment depth); best of two with sides swapped if no knob works; human playtest before locking |
+| Q3 | First-mover fairness (knob chosen in slice 2 from data, then confirmed by playtest) | One tuned compensation knob proven in the sim (round-1 AP or deployment depth); best of two with sides swapped if no knob works; human playtest before locking |
 | Q4 | Win rule at the round limit | 25 rounds, then higher share of total max HP remaining; equal is a draw |
 | Q5 | Terrain | Plain arena, mirrored deployment |
 | Q6 | Persistence | Separate `pt_versus_match` key; draft not saved |
