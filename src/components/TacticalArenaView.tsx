@@ -722,7 +722,9 @@ export const TacticalArenaView: React.FC = () => {
           portrait={getUnitPortrait}
           onCancel={() => setShowPartySetup(false)}
           onConfirm={(guestName, humans) => {
-            const foes = soloUnitsRef.current.filter((u) => !u.isPlayer);
+            // The rivals come from the party build, which carries the co-op enemy scale. Safe to swap:
+            // the buddy can only be offered before anything has happened (canOfferBuddy).
+            const foes = buildPartyUnits(guestName).filter((u) => !u.isPlayer);
             const units = [...humans, ...foes];
             soloUnitsRef.current = units;
             setSoloUnits(units);

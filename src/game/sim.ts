@@ -2,6 +2,7 @@ import { GridTile, UnitEntity } from '../types/game';
 import { BotProfile, runBotTurn } from './bot';
 import { checkWinCondition } from './rules';
 import { createRng } from './rng';
+import { SLOTS } from './party';
 
 /** Who pilots a side in a headless match: a bot profile, or nobody ('passive' never acts). */
 export type Pilot = BotProfile | 'passive';
@@ -14,7 +15,7 @@ export interface SimResult {
 }
 
 /**
- * Plays a whole solo-rules match with no UI: player side first, then the enemy,
+ * Plays a whole solo-rules match with no UI: player side first (slot 0 then slot 1 for a party), then the enemy,
  * AP refreshed at the start of each side's half-turn. Fully determined by `seed`.
  */
 export function simulateMatch(opts: {
@@ -32,7 +33,13 @@ export function simulateMatch(opts: {
   const half = (side: 'player' | 'enemy', pilot: Pilot, round: number) => {
     units = units.map((u) => (u.isPlayer === (side === 'player') && u.hp > 0 ? { ...u, ap: u.maxAp } : u));
     if (pilot !== 'passive') {
-      units = runBotTurn(units, opts.grid, round, rng, { profile: pilot, side, timestamp: '' }).units;
+      // A party (units with controllers on the player side) plays slot by slot, the way two people
+      // sharing a device do; a solo squad plays in one go, exactly as before.
+      const slots = side === 'player' && units.some((u) => u.isPlayer && u.controller !== undefined) ? SLOTS : [undefined];
+      for (const controller of slots) {
+        units = runBotTurn(units, opts.grid, round, rng, { profile: pilot, side, controller, timestamp: '' }).units;
+        if (checkWinCondition(units).isOver) break;
+      }
     }
     return checkWinCondition(units);
   };

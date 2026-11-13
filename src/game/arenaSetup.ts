@@ -1,5 +1,5 @@
 import { GridTile, IslandSector, TamedDino, UnitEntity } from '../types/game';
-import { BALANCE, enemyLevelScale, playerLevelScale } from './balance';
+import { BALANCE, coopEnemyScaleFor, enemyLevelScale, playerLevelScale } from './balance';
 import { DINOSAUR_SPECIES, UNIT_PORTRAITS } from './constants';
 
 // Arena and squad construction for solo matches (skirmish + campaign). Pure, so the
@@ -62,6 +62,8 @@ export function buildArenaGrid(islandId?: string): GridTile[] {
 /** Pass & play: a buddy joins the host's party (see docs/local-coop-spec.md). */
 export interface PartyOptions {
   guestName: string;
+  /** Enemy stat multiplier for this match. Default: the sector's coopEnemyScaleFor. The balance report overrides it to tune. */
+  enemyScale?: number;
 }
 
 /**
@@ -365,6 +367,18 @@ export function buildSoloUnits(
         statusEffects: [],
       },
     ];
+  }
+
+  // A party of four is stronger than the squad of three the sectors were built for.
+  const coopScale = party ? party.enemyScale ?? coopEnemyScaleFor(activeSectorMission?.id) : 1;
+  if (coopScale !== 1) {
+    enemyUnits = enemyUnits.map((u) => ({
+      ...u,
+      hp: Math.round(u.hp * coopScale),
+      maxHp: Math.round(u.maxHp * coopScale),
+      attack: Math.round(u.attack * coopScale),
+      defense: Math.round(u.defense * coopScale),
+    }));
   }
 
   return [...playerUnits, ...enemyUnits];

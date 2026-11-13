@@ -3,7 +3,7 @@
 // The bots are proxies, not people: use this to find clearly broken cells, not to hit exact targets.
 
 import { BOT_PROFILES as P, BotProfile } from '../src/game/bot';
-import { BALANCE, NEW_GAME_XP, levelForXp, xpForLevel } from '../src/game/balance';
+import { BALANCE, NEW_GAME_XP, coopEnemyScaleFor, levelForXp, xpForLevel } from '../src/game/balance';
 import { buildArenaGrid, buildSoloUnits } from '../src/game/arenaSetup';
 import { ISLAND_CAMPAIGN_SECTORS } from '../src/game/constants';
 import { simulateMatch } from '../src/game/sim';
@@ -75,6 +75,29 @@ ISLAND_CAMPAIGN_SECTORS.forEach((s, i) => {
   const enemies = s.enemySquad.map((e) => `${e.name} L${e.level}`).join(', ');
   out.push(`| ${s.id} | ${s.threatLevel} | ${enemies} | ${lvl} | ${fmt(base)} | ${fmt(mod)} | ${fmt(easy)} | ${(mod.rounds / mod.n).toFixed(1)} | ${base.unfinished + mod.unfinished + easy.unfinished} |`);
 });
+
+out.push('');
+out.push('## Co-op (pass & play, two bots share the human side)');
+out.push('');
+out.push(`Party: host commander + Ghostclaw vs buddy commander + Shieldhorn, default split; slot 0 acts, then slot 1, then the rival clan. Both slots are moderate bots at the expected level. Enemy stats are multiplied by the sector's co-op scale (\`COOP_SECTOR_SCALE\` in \`src/game/balance.ts\`; skirmish uses \`BALANCE.coopEnemyScale\`). Target: 55-85% per sector. The bots are a floor: a human pair will usually do better.`);
+out.push('');
+out.push('| Sector | Expected level | Co-op unscaled (x1.0) | Scale | Co-op at scale | In 55-85% band |');
+out.push('|---|---|---|---|---|---|');
+let outOfBand = 0;
+ISLAND_CAMPAIGN_SECTORS.forEach((s, i) => {
+  const lvl = levelForXp(NEW_GAME_XP + 350 * Math.max(0, i - 1));
+  const g = buildArenaGrid(s.islandId);
+  const scale = coopEnemyScaleFor(s.id);
+  const un = run(buildSoloUnits('Tester', starters, s as never, lvl, { guestName: 'Buddy', enemyScale: 1 }), P.moderate, g);
+  const sc = run(buildSoloUnits('Tester', starters, s as never, lvl, { guestName: 'Buddy', enemyScale: scale }), P.moderate, g);
+  const pct = (sc.wins / sc.n) * 100;
+  const ok = pct >= 55 && pct <= 85;
+  if (!ok) outOfBand++;
+  out.push(`| ${s.id} | ${lvl} | ${fmt(un)} | x${scale} | ${fmt(sc)} | ${ok ? 'yes' : 'NO'} |`);
+});
+out.push('');
+out.push(outOfBand === 0 ? 'Every campaign sector is inside the band.' : `${outOfBand} sector(s) are outside the band: re-tune their scale.`);
+out.push('Known exception: sector_primoris_1 is a known exception: its win rate jumps from 92% to 50% between x1.656 and x1.657 (a one-hit-kill threshold), so no multiplier lands in the band; it starts liberated, so it is only replayed.');
 
 out.push('');
 out.push('## Level curve');
