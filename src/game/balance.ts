@@ -40,10 +40,19 @@ export const COOP_SECTOR_SCALE: Record<string, number> = {
 export const VERSUS_ROUND_LIMIT = 25;
 
 /**
- * Versus: per-template stat multipliers on the level-5 species stats. First draft, all 1.0; slice 2
- * tunes these with the simulator so every template wins 45-55% across random drafts.
+ * Versus: per-template stat multipliers on the level-5 species stats (docs/balance.md, "Versus"). hp and
+ * attack share one multiplier; defense is left alone. Tuned with `npm run balance:versus` so that each
+ * template wins 45-55% of best-of-two matches across random drafts. Re-tune after changing species stats,
+ * abilities or the damage formula.
  */
-export const VERSUS_TEMPLATE_SCALE: Record<string, { hp: number; attack: number; defense: number }> = {};
+export const VERSUS_TEMPLATE_SCALE: Record<string, { hp: number; attack: number; defense: number }> = {
+  velociraptor: { hp: 1.1, attack: 1.1, defense: 1 },
+  triceratops: { hp: 0.84, attack: 0.84, defense: 1 },
+  pteranodon: { hp: 0.92, attack: 0.92, defense: 1 },
+  ankylosaurus: { hp: 0.87, attack: 0.87, defense: 1 },
+  dilophosaurus: { hp: 1.245, attack: 1.245, defense: 1 },
+  commander: { hp: 1.01, attack: 1.01, defense: 1 },
+};
 
 export function coopEnemyScaleFor(sectorId: string | null | undefined): number {
   return (sectorId && COOP_SECTOR_SCALE[sectorId]) || BALANCE.coopEnemyScale;

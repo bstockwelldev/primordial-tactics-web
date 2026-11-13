@@ -106,7 +106,7 @@ export function buildVersusUnits(picksA: readonly string[], picksB: readonly str
 export const isVersusMatch = (units: UnitEntity[]): boolean => units.some((u) => !u.isPlayer && u.controller !== undefined);
 
 /** Share of a side's total max HP still standing, 0..1. */
-function hpShare(units: UnitEntity[], slot: Slot): number {
+export function hpShare(units: UnitEntity[], slot: Slot): number {
   const mine = units.filter((u) => controllerOf(u) === slot && (u.isPlayer || u.controller !== undefined));
   const max = mine.reduce((n, u) => n + u.maxHp, 0);
   return max === 0 ? 0 : mine.reduce((n, u) => n + Math.max(0, u.hp), 0) / max;
@@ -129,4 +129,31 @@ export function randomSquad(rng: () => number): VersusTemplateId[] {
   const squad: VersusTemplateId[] = [];
   while (squad.length < SQUAD_SIZE) squad.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
   return squad;
+}
+
+/** One game of a best-of-two, seen from player A's squad: did A win, and by how much HP share. */
+export interface PairGame {
+  /** 'a' / 'b' by player (not by who moved first); 'draw' if nobody won. */
+  winner: 'a' | 'b' | 'draw';
+  /** Player A's share of max HP left minus player B's, -1..1. */
+  margin: number;
+}
+
+export interface PairResult {
+  winner: 'a' | 'b' | 'draw';
+  aWins: number;
+  bWins: number;
+}
+
+/**
+ * Scores a best-of-two with sides swapped (docs/local-versus-spec.md, Q3): each player moves first once,
+ * which cancels the move-order bias (large, and running both ways depending on the squads) apart from the dice. More game
+ * wins takes the pair; at one win each the larger total HP-share margin wins; equal is a draw.
+ */
+export function scorePair(games: readonly [PairGame, PairGame]): PairResult {
+  const aWins = games.filter((g) => g.winner === 'a').length;
+  const bWins = games.filter((g) => g.winner === 'b').length;
+  if (aWins !== bWins) return { winner: aWins > bWins ? 'a' : 'b', aWins, bWins };
+  const margin = games[0].margin + games[1].margin;
+  return { winner: Math.abs(margin) < 1e-9 ? 'draw' : margin > 0 ? 'a' : 'b', aWins, bWins };
 }

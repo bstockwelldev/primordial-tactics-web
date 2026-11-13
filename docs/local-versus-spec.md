@@ -46,6 +46,8 @@ The sim says the second mover wins about 88% of mirrored matches. Options, with 
 2. **Best of two, sides swapped** as the shipped answer if no single knob gets inside the band: each player moves first once, the result is the pair. Simple and fair, but doubles the match length.
 3. **Coin flip only.** Cheapest; leaves a known ~76-point swing to luck. Rejected unless the data shows the human game does not have the bias.
 
+*As built (slice 2, 2026-11-13):* no knob works, so the shipped answer is option 2, **best of two with sides swapped** (`scorePair`, `simulatePair`). Measured over all 20 possible squads against themselves, the first mover's win rate ranges from 0% to 98% (mean distance from 50%: 24 points), and a round-1 AP bonus of -1, +1 or +2 left that at 28, 20 and 26 points: the bias runs both ways (mobile squads favour the second mover, tanky squads the first), so no single compensation can cancel it. The skirmish figure of ~12% was one squad, not a general rule. A pair is won by more game wins; at one win each the larger total HP-share margin wins; equal is a draw. Matches end around round 10, so the round limit is not the cause.
+
 Because the bias was measured on bots, require a short human playtest before locking the knob. Who is Player 1 (and so moves first) is chosen by a visible coin flip.
 
 ### 3.6 Fairness of information
@@ -82,7 +84,7 @@ A match in progress can be saved so a reload resumes it, but it is stored under 
 5. A bot never moves a side-B unit (regression test in `bot` and `sim`).
 6. No XP, loot, liberation, stats or save of the player's profile changes after a versus match; a saved versus match is never offered by Resume for a campaign mission.
 7. Round-limit and draw handling as in 3.1.
-8. `npm run balance` prints a versus section: first-mover win rate in mirrored matches inside 45-55% (or the best-of-two fallback is in force), and every template's win rate across random drafts inside 45-55%.
+8. `npm run balance:versus` prints the move-order measurements, every template's win rate across random draft pairs inside 45-55% (met 2026-11-13, see `docs/balance-versus.md`), and the squad-combination spread. The best-of-two fallback is in force (no single knob works, see 3.5). *As built:* a separate file, `docs/balance-versus.md`, because `docs/balance.md` is regenerated whole by `npm run balance`.
 9. The draft screen, banner and overlay are usable at 375px with 44px touch targets and do not hide the board.
 10. A reload mid-match resumes the same side's phase (with the handoff overlay); a reload mid-draft restarts the draft.
 
@@ -127,7 +129,7 @@ Slices 1 and 2 first, since the pool and the first-mover fix decide whether the 
 
 - **Tempo bias** (3.5): the largest. If no single knob gets a mirror match inside 45-55%, the best-of-two fallback doubles match length, which may feel slow at one device. The bias was measured on bots; a human playtest could show a different size.
 - **Bot takeover trap** (section 4): forgetting the human-controlled skip makes the bot play side B, silently. Covered by criterion 5.
-- **Too few templates:** six templates and 20 possible squads each can still have a solved "best pick". The sim catches dominant templates, not dominant *combinations*; check the top squads by win rate too.
+- **Too few templates:** six templates and 20 possible squads each can still have a solved "best pick". The sim catches dominant templates, not dominant *combinations*. *Measured (slice 2):* templates are even (47-56%) but squad combinations are not: the best squad (velociraptor, ankylosaurus, dilophosaurus) wins 84% of pairs and the worst (velociraptor, pteranodon, dilophosaurus) 11%. Composition matters far more than any single unit; this is the open balance item to playtest, and a fix (a point budget, a role rule, or a smaller pool) needs a decision.
 - **Cliff-edge tuning:** stat multipliers can jump a win rate by tens of points in a tiny step (seen in co-op). The band is a target, not a guarantee, and the template table needs re-tuning if species stats, abilities or the damage formula change.
 - **Privacy on a shared screen:** a screenshot, browser back, or a reload mid-draft can leak or lose picks. The design accepts a restart on reload and keeps picks out of storage.
 - **Scope creep:** every item in section 8 is tempting; none is needed to learn whether blind-draft versus is fun.

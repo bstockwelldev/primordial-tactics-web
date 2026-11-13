@@ -3,7 +3,7 @@ import { BotProfile, runBotTurn } from './bot';
 import { checkWinCondition } from './rules';
 import { createRng } from './rng';
 import { SLOTS, refreshApFor } from './party';
-import { isVersusMatch, roundLimitWinner } from './versus';
+import { PairResult, buildVersusUnits, hpShare, isVersusMatch, roundLimitWinner, scorePair } from './versus';
 import { VERSUS_ROUND_LIMIT } from './balance';
 
 /** Who pilots a side in a headless match: a bot profile, or nobody ('passive' never acts). */
@@ -80,4 +80,30 @@ export function simulateMatch(opts: {
     }
   }
   return { winner: 'unfinished', rounds: maxRounds, units };
+}
+
+/**
+ * A versus best-of-two with sides swapped: player A's squad moves first in game 1, player B's squad
+ * in game 2 (different seeds). Returns the scored pair. `a` and `b` are the two players' pilots.
+ */
+export function simulatePair(opts: { picksA: readonly string[]; picksB: readonly string[]; grid: GridTile[]; seed: number; a: Pilot; b: Pilot }): PairResult {
+  const game = (first: 'a' | 'b') => {
+    const [slot0, slot1] = first === 'a' ? [opts.picksA, opts.picksB] : [opts.picksB, opts.picksA];
+    const r = simulateMatch({
+      units: buildVersusUnits(slot0, slot1),
+      grid: opts.grid,
+      seed: opts.seed * 2 + (first === 'a' ? 0 : 1),
+      player: first === 'a' ? opts.a : opts.b,
+      enemy: first === 'a' ? opts.b : opts.a,
+    });
+    const slotWinner = r.winner === 'player' ? 0 : r.winner === 'enemy' ? 1 : null;
+    const aSlot = first === 'a' ? 0 : 1;
+    const shareA = hpShare(r.units, aSlot);
+    const shareB = hpShare(r.units, aSlot === 0 ? 1 : 0);
+    return {
+      winner: slotWinner === null ? ('draw' as const) : slotWinner === aSlot ? ('a' as const) : ('b' as const),
+      margin: shareA - shareB,
+    };
+  };
+  return scorePair([game('a'), game('b')]);
 }
