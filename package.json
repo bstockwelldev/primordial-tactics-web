@@ -11,6 +11,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "balance": "tsx scripts/difficulty-report.ts",
+    "balance:versus": "tsx scripts/versus-report.ts",
     "test": "tsx --test src/game/*.test.ts tests/*.test.ts"
   },
   "dependencies": {
