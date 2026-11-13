@@ -2,7 +2,9 @@ import { GridTile, UnitEntity } from '../types/game';
 import { BotProfile, runBotTurn } from './bot';
 import { checkWinCondition } from './rules';
 import { createRng } from './rng';
-import { SLOTS } from './party';
+import { SLOTS, refreshApFor } from './party';
+import { isVersusMatch, roundLimitWinner } from './versus';
+import { VERSUS_ROUND_LIMIT } from './balance';
 
 /** Who pilots a side in a headless match: a bot profile, or nobody ('passive' never acts). */
 export type Pilot = BotProfile | 'passive';
@@ -27,7 +29,8 @@ export function simulateMatch(opts: {
   maxRounds?: number;
 }): SimResult {
   const rng = createRng(opts.seed);
-  const maxRounds = opts.maxRounds ?? 60;
+  const versus = isVersusMatch(opts.units);
+  const maxRounds = opts.maxRounds ?? (versus ? VERSUS_ROUND_LIMIT : 60);
   let units = opts.units.map((u) => ({ ...u, ap: u.maxAp }));
 
   const half = (side: 'player' | 'enemy', pilot: Pilot, round: number) => {
@@ -43,6 +46,28 @@ export function simulateMatch(opts: {
     }
     return checkWinCondition(units);
   };
+
+  // Versus: both sides are human-controlled squads. Slot 0 (side A) plays, then slot 1 (side B), each
+  // refreshed at the start of its own phase. `player` pilots side A and `enemy` pilots side B. At the
+  // round limit the larger share of max HP remaining wins.
+  if (versus) {
+    for (let round = 1; round <= maxRounds; round++) {
+      for (const slot of SLOTS) {
+        units = refreshApFor(units, slot);
+        const pilot = slot === 0 ? opts.player : opts.enemy;
+        if (pilot !== 'passive') {
+          units = runBotTurn(units, opts.grid, round, rng, { profile: pilot, side: slot === 0 ? 'player' : 'enemy', controller: slot, timestamp: '' }).units;
+        }
+        if (checkWinCondition(units).isOver) {
+          const aAlive = units.some((u) => u.isPlayer && u.hp > 0);
+          const bAlive = units.some((u) => !u.isPlayer && u.hp > 0);
+          return { winner: aAlive ? 'player' : bAlive ? 'enemy' : 'draw', rounds: round, units };
+        }
+      }
+    }
+    const w = roundLimitWinner(units);
+    return { winner: w === 0 ? 'player' : w === 1 ? 'enemy' : 'draw', rounds: maxRounds, units };
+  }
 
   for (let round = 1; round <= maxRounds; round++) {
     for (const side of ['player', 'enemy'] as const) {

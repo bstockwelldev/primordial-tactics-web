@@ -244,6 +244,8 @@ test('balance band: two moderate bots beat every campaign sector at its expected
     const pct = (wins / seeds) * 100;
     assert.ok(pct >= 40 && pct <= 95, `${s.id}: ${pct.toFixed(0)}% wins at level ${lvl}`);
   });
+});
+
 // ---- slice 3: handoff and save/resume ----
 import { readSoloSave } from './soloSave';
 

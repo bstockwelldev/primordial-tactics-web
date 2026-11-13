@@ -36,6 +36,15 @@ export const COOP_SECTOR_SCALE: Record<string, number> = {
   sector_magitek_3: 1.18,
 };
 
+/** Versus (docs/local-versus-spec.md): rounds before the match is decided by remaining HP share. */
+export const VERSUS_ROUND_LIMIT = 25;
+
+/**
+ * Versus: per-template stat multipliers on the level-5 species stats. First draft, all 1.0; slice 2
+ * tunes these with the simulator so every template wins 45-55% across random drafts.
+ */
+export const VERSUS_TEMPLATE_SCALE: Record<string, { hp: number; attack: number; defense: number }> = {};
+
 export function coopEnemyScaleFor(sectorId: string | null | undefined): number {
   return (sectorId && COOP_SECTOR_SCALE[sectorId]) || BALANCE.coopEnemyScale;
 }

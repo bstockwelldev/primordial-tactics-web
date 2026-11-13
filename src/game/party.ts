@@ -13,6 +13,12 @@ export const SLOTS: readonly Slot[] = [0, 1];
 /** The slot that commands a unit. Units with no controller (every solo match) belong to slot 0. */
 export const controllerOf = (unit: UnitEntity): Slot => unit.controller ?? 0;
 
+/** True for units the bot drives: the enemy side with nobody assigned to command them. */
+export const isBotControlled = (unit: UnitEntity): boolean => !unit.isPlayer && unit.controller === undefined;
+
+/** Whether any bot-controlled unit is still alive (when none are, there is no enemy phase). */
+export const hasBots = (units: UnitEntity[]): boolean => units.some((u) => u.hp > 0 && isBotControlled(u));
+
 /**
  * True for units a human commands. Written so it does not assume "the other side is the bot":
  * a future versus mode can give an enemy-side unit a controller and it then counts as human.
@@ -45,7 +51,11 @@ export function nextPhase(units: UnitEntity[], current: PartyPhase): { phase: Pa
     return living.length > 0 ? { phase: living[0], newRound: true } : { phase: 'enemy', newRound: false };
   }
   const following = living.find((slot) => slot > current);
-  return { phase: following ?? 'enemy', newRound: false };
+  if (following !== undefined) return { phase: following, newRound: false };
+  // Past the last human slot. The bots go next, but only if there are any: in a versus match both
+  // sides are human, so the round simply starts over with the first living slot.
+  if (!hasBots(units) && living.length > 0) return { phase: living[0], newRound: true };
+  return { phase: 'enemy', newRound: false };
 }
 
 /** Why this slot assignment cannot start a match, or null when it can. Each player needs a unit. */
@@ -84,4 +94,16 @@ export function swapAssignments(assignments: Record<string, Slot>): Record<strin
 export function handoffNeeded(units: UnitEntity[], to: Slot): boolean {
   const living = livingSlots(units);
   return living.length > 1 && living.includes(to);
+}
+
+/**
+ * Gives a phase's living units their full AP (a human slot's units, or the bots'). A round-based
+ * versus match refreshes each side at the start of its own phase; units of other phases are untouched.
+ */
+export function refreshApFor(units: UnitEntity[], phase: PartyPhase): UnitEntity[] {
+  return units.map((u) => {
+    if (u.hp <= 0) return u;
+    const mine = phase === 'enemy' ? isBotControlled(u) : isHumanControlled(u) && controllerOf(u) === phase;
+    return mine ? { ...u, ap: u.maxAp } : u;
+  });
 }

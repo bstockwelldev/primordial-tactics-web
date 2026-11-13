@@ -1,5 +1,5 @@
 import { Ability, BattleActionLog, GridTile, UnitEntity } from '../types/game';
-import { controllerOf } from './party';
+import { controllerOf, isBotControlled, isHumanControlled } from './party';
 import { calculateDamage, calculateDistance, calculateTorporDamage, canUnitMoveTo, moveApCost } from './rules';
 
 // ---------------------------------------------------------------------------
@@ -76,7 +76,11 @@ export interface BotTurnOptions {
   profile?: BotProfile;
   /** Which side the bot plays. Default: the enemy (isPlayer === false). */
   side?: 'enemy' | 'player';
-  /** Pass & play: only the units this slot commands act (the other slot's units stand still). Default: all of the side. */
+  /**
+   * Plays the units a human slot commands (pass & play, and versus where both sides are human), for the
+   * simulator, regardless of side. Without it the bot never drives a human-controlled unit: the real
+   * enemy bot plays only `isBotControlled` units, so a versus opponent is never taken over.
+   */
   controller?: 0 | 1;
   /** Log timestamp; injectable so results are byte-for-byte reproducible. */
   timestamp?: string;
@@ -414,11 +418,15 @@ export function runBotTurn(
   const logs: BattleActionLog[] = [];
   const trace: BotTraceEntry[] = [];
   const log = (entry: Omit<BattleActionLog, 'id' | 'turn' | 'timestamp'>) =>
-    logs.push({ ...entry, id: `log_ai_${botIsPlayer ? 'p' : 'e'}_${turn}_${logs.length}`, turn, timestamp });
+    logs.push({ ...entry, id: `log_ai_${botIsPlayer ? 'p' : 'e'}${options.controller ?? ''}_${turn}_${logs.length}`, turn, timestamp });
 
   for (const bot of state) {
-    if (bot.isPlayer !== botIsPlayer || bot.hp <= 0) continue;
-    if (options.controller !== undefined && controllerOf(bot) !== options.controller) continue;
+    if (bot.hp <= 0) continue;
+    if (options.controller !== undefined) {
+      if (!isHumanControlled(bot) || controllerOf(bot) !== options.controller) continue;
+    } else if (botIsPlayer ? !bot.isPlayer : !isBotControlled(bot)) {
+      continue;
+    }
 
     let current: BotState = 'ASSESS';
     const enter = (next: BotState) => {
