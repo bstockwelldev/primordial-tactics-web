@@ -70,5 +70,5 @@ AI-generated sprites from text prompts are an option for producing unit and crea
 - **Torpor / taming:** the code implements a torpor system (tranq to tame); the GDD mentions taming and hunts but specifies no torpor mechanic. Adopt it into the design or remove it from code?
 - **Multiplayer:** the GDD describes a single-player campaign; the repo is multiplayer-first and the locked direction is eventual seamless multiplayer. Needs a multiplayer design section (future work, not this cleanup).
 - **AI features:** Gemini NPC guides and AI coaching existed in the scaffold but not in the GDD. **Cut 2026-11-13** (owner decision): they only ran on the local dev server and did nothing on production.
-- **Name:** Primordial Tactics (GDD and repo) vs "Primal Tactics" (app metadata). Pick one.
+- **Name:** **Primordial Tactics** (decided 2026-11-13; the app metadata was renamed from "Primal Tactics" to match).
 - **Primordia Survival relation:** is this the digital sibling of Brandon's board-game prototype, or a separate project? Unconfirmed — shared rules/lore must not be assumed.

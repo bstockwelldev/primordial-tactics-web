@@ -26,7 +26,7 @@ app.use(express.json({ limit: '100kb' }));
 // MVP Launch Feature Roadmap Endpoint
 app.get('/api/roadmap', (req, res) => {
   res.json({
-    title: 'Primal Tactics: MVP to Production Launch Roadmap',
+    title: 'Primordial Tactics: MVP to Production Launch Roadmap',
     phases: [
       {
         phase: 'Phase 1: Tactical Core & Taming (Current Prototype)',
@@ -111,7 +111,7 @@ async function startServer() {
 
   const PORT = Number(process.env.PORT) || 3000;
   httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] Primal Tactics server listening on http://0.0.0.0:${PORT}`);
+    console.log(`[Server] Primordial Tactics server listening on http://0.0.0.0:${PORT}`);
   });
 }
 

@@ -88,10 +88,10 @@ This doc is the gap list between that design and the scaffold as built (through 
 - **Campaign win double-awards — fixed 2026-11-09** (see gap 3).
 - **Solo bot never moves — fixed 2026-11-09** (see gap 3).
 
-### 11. Name — Primordial vs Primal
+### 11. Name — Primordial vs Primal (DECIDED 2026-11-13: Primordial Tactics, renamed)
 
 - GDD and repo say **Primordial Tactics**; app metadata, the HTML title, and server strings (health endpoint, Gemini prompts, console log) say **Primal Tactics**.
-- Left: pick one. The rename touches `package.json` (also still `react-example` v0.0.0), `index.html`, `metadata.json`, and the server strings.
+- Done 2026-11-13. The rename touched `package.json` (also still `react-example` v0.0.0), `index.html`, `metadata.json`, and the server strings.
 
 ### 12. Roadmap unification — three roadmaps, one plan
 
