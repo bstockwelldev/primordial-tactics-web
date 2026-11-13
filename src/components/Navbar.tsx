@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useGame, ActiveScreen } from '../context/GameContext';
+import { BALANCE, xpForLevel } from '../game/balance';
 import {
   Shield,
   Dna,
@@ -21,6 +22,8 @@ export const Navbar: React.FC = () => {
     setActiveScreen,
     resources,
     playerName,
+    playerLevel,
+    playerXp,
     isConnected,
     setShowRoadmapModal,
     setShowLobbyModal,
@@ -29,6 +32,20 @@ export const Navbar: React.FC = () => {
     yourTurnCount,
     activeSectorMission,
   } = useGame();
+
+  // On a phone the tab strip scrolls sideways; keep the active tab (e.g. the arena on first visit) in view.
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const active = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (active && navRef.current) {
+      navRef.current.scrollTo({ left: active.offsetLeft - navRef.current.clientWidth / 2 + active.clientWidth / 2, behavior: 'auto' });
+    }
+  }, [activeScreen]);
+
+  // Progress toward the next level (the curve lives in game/balance.ts); null at the level cap.
+  const levelStart = xpForLevel(playerLevel);
+  const levelEnd = playerLevel < BALANCE.maxLevel ? xpForLevel(playerLevel + 1) : null;
+  const levelProgress = levelEnd === null ? 1 : Math.min(1, Math.max(0, (playerXp - levelStart) / (levelEnd - levelStart)));
 
   const navItems: { id: ActiveScreen; label: string; icon: React.ReactNode }[] = [
     { id: 'base', label: 'Base Enclave', icon: <Home className="w-4 h-4" /> },
@@ -68,6 +85,17 @@ export const Navbar: React.FC = () => {
               </span>
               <span>•</span>
               <span className="text-stone-300 font-medium">{playerName}</span>
+              <span>•</span>
+              <span
+                data-testid="player-level"
+                title={levelEnd === null ? `${playerXp} XP (max level)` : `${playerXp} / ${levelEnd} XP to level ${playerLevel + 1}. Your squad's stats grow with level.`}
+                className="flex items-center gap-1.5 text-amber-300 font-semibold"
+              >
+                Lv {playerLevel}
+                <span className="hidden sm:block w-12 h-1.5 rounded-full bg-stone-800 overflow-hidden">
+                  <span className="block h-full bg-amber-500" style={{ width: `${Math.round(levelProgress * 100)}%` }} />
+                </span>
+              </span>
             </div>
           </div>
         </div>
@@ -143,12 +171,13 @@ export const Navbar: React.FC = () => {
       </div>
 
       {/* Navigation Tabs */}
-      <nav className="max-w-7xl mx-auto px-4 flex gap-1 sm:gap-2 overflow-x-auto py-1 border-t border-stone-800/60 scrollbar-none">
+      <nav ref={navRef} className="max-w-7xl mx-auto px-4 flex gap-1 sm:gap-2 overflow-x-auto py-1 border-t border-stone-800/60 scrollbar-none">
         {navItems.map((item) => {
           const isActive = activeScreen === item.id;
           return (
             <button
               key={item.id}
+              aria-current={isActive ? 'page' : undefined}
               onClick={() => setActiveScreen(item.id)}
               className={`flex items-center gap-2 min-h-11 lg:min-h-0 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
                 isActive
