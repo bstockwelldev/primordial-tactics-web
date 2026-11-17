@@ -805,7 +805,7 @@ export const TacticalArenaView: React.FC = () => {
     };
     const title = !won ? 'Not this time' : activeSectorMission ? 'Mission complete!' : 'Victory!';
     const detail = !won
-      ? `+${MATCH_XP.loss} XP for trying. Every battle starts with a fresh squad, so give it another go.`
+      ? `+${MATCH_XP.loss} XP for trying. Every battle starts with a fresh squad, so give it another go.${activeSectorMission ? ' Tip: end your first turn without moving and let the rivals come to you.' : ''}`
       : activeSectorMission
       ? `${activeSectorMission.sectorName} is liberated. +${MATCH_XP.win} XP.`
       : `You won your first battle. +${MATCH_XP.win} XP.`;
@@ -1172,6 +1172,13 @@ export const TacticalArenaView: React.FC = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Plain-language tip for the first turn of a mission: the rivals punish whoever walks into range first. */}
+      {!FLAGS.hud && activeSectorMission && !currentRoom && !party && !versus && soloTurn === 1 && !isMatchOver && (
+        <p data-testid="wait-tip" className="px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-200">
+          Tip: press End Turn first. The rivals usually walk into your range, and then you strike first.
+        </p>
       )}
 
       {/* Arena Battlefield & Action Panel */}
