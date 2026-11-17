@@ -85,3 +85,6 @@ export function playerLevelScale(playerLevel: number): number {
  * mission (sector_primoris_2; sector 1 starts liberated) is balanced for that level.
  */
 export const NEW_GAME_XP = 800;
+
+/** XP for finishing a match (solo, campaign or PvP). Shared by the reward code and the result screen. */
+export const MATCH_XP = { win: 300, loss: 100 };

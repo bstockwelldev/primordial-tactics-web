@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import confetti from 'canvas-confetti';
 import { useGame } from '../context/GameContext';
 import { FLAGS } from '../config/flags';
+import { GUIDE_TEXT, nextGuideStep, type GuideProgress } from '../game/guide';
+import { missionList, nextMission } from '../game/missions';
+import { MATCH_XP } from '../game/balance';
 import {
   UnitEntity,
   GridTile,
@@ -62,6 +65,7 @@ import {
 } from 'lucide-react';
 
 const INTRO_SEEN_KEY = 'pt_seen_intro';
+const GUIDE_DONE_KEY = 'pt_guide_done';
 
 export const TacticalArenaView: React.FC = () => {
   const {
@@ -78,6 +82,8 @@ export const TacticalArenaView: React.FC = () => {
     activeSectorMission,
     clearActiveSectorMission,
     setActiveScreen,
+    campaignSectors,
+    startSectorMission,
     versusResumeRequested,
     setVersusResumeRequested,
   } = useGame();
@@ -147,6 +153,24 @@ export const TacticalArenaView: React.FC = () => {
     } catch {}
   };
 
+  // First-battle step prompts (simple mode). Done once per browser; anyone who saw the old intro strip is done too.
+  const [guideDone, setGuideDone] = useState(() => {
+    try {
+      return localStorage.getItem(GUIDE_DONE_KEY) === '1' || localStorage.getItem(INTRO_SEEN_KEY) === '1';
+    } catch {
+      return true;
+    }
+  });
+  const [guideStarted, setGuideStarted] = useState(false);
+  const [guideProgress, setGuideProgress] = useState<GuideProgress>({ moved: false, attacked: false, ended: false });
+  const guideBaseline = useRef<{ pos: Record<string, string>; enemyHp: number } | null>(null);
+  const finishGuide = () => {
+    setGuideDone(true);
+    try {
+      localStorage.setItem(GUIDE_DONE_KEY, '1');
+    } catch {}
+  };
+
   // The human side with a buddy and the default split, for the party setup screen.
   const buildPartyUnits = useCallback(
     (guestName: string) => buildSoloUnits(playerName, tamedDinos, activeSectorMission, playerLevel, { guestName }),
@@ -162,6 +186,8 @@ export const TacticalArenaView: React.FC = () => {
     setSoloWinner(null);
     setSoloTurn(1);
     setSoloIsPlayerTurn(true);
+    guideBaseline.current = null;
+    setGuideProgress({ moved: false, attacked: false, ended: false });
     setParty(null);
     setVersus(null);
     setShowVersusDraft(false);
@@ -320,6 +346,27 @@ export const TacticalArenaView: React.FC = () => {
     (hoveredTile && activeUnits.find((u) => u.x === hoveredTile.x && u.y === hoveredTile.y && u.hp > 0)) ||
     (inspectedUnitOverrideId && activeUnits.find((u) => u.id === inspectedUnitOverrideId && u.hp > 0)) ||
     selectedUnit;
+
+  // Watch the board during the guided battle: a friendly unit that changed tile = moved, enemy HP down = attacked.
+  const guideActive = guideStarted && !guideDone && !currentRoom && !party && !versus && !activeSectorMission && !isMatchOver;
+  useEffect(() => {
+    if (!guideActive || activeUnits.length === 0) return;
+    const friends = activeUnits.filter(isFriendly);
+    const enemyHp = activeUnits.filter((u) => !isFriendly(u)).reduce((sum, u) => sum + u.hp, 0);
+    if (!guideBaseline.current) {
+      guideBaseline.current = { pos: Object.fromEntries(friends.map((u) => [u.id, `${u.x},${u.y}`])), enemyHp };
+      return;
+    }
+    const base = guideBaseline.current;
+    const moved = friends.some((u) => base.pos[u.id] !== undefined && base.pos[u.id] !== `${u.x},${u.y}`);
+    const attacked = enemyHp < base.enemyHp;
+    const ended = soloTurn > 1;
+    setGuideProgress((p) => (p.moved && p.attacked && p.ended ? p : { moved: p.moved || moved, attacked: p.attacked || attacked, ended: p.ended || ended }));
+  }, [guideActive, activeUnits, soloTurn]);
+  const guideStep = guideActive ? nextGuideStep(guideProgress) : null;
+  useEffect(() => {
+    if (guideStarted && !guideDone && !guideStep && guideProgress.ended) finishGuide();
+  }, [guideStarted, guideDone, guideStep, guideProgress.ended]);
 
   // Trigger Victory celebration
   useEffect(() => {
@@ -740,6 +787,47 @@ export const TacticalArenaView: React.FC = () => {
     setChatInput('');
   };
 
+  // Simple-mode result screen: what you got, and exactly one obvious next step.
+  const simpleResult = () => {
+    const won = winnerId === (currentRoom ? myPlayerId : 'player_me');
+    const next = nextMission(missionList(campaignSectors, FLAGS.fullCampaign), activeSectorMission?.id);
+    const btn = 'min-h-11 px-6 py-2.5 rounded-xl font-bold text-sm cursor-pointer shadow-lg';
+    const primary = `${btn} bg-amber-600 hover:bg-amber-500 text-white`;
+    const secondary = `${btn} bg-stone-800 hover:bg-stone-700 text-stone-100 border border-stone-600`;
+    const goMissions = () => {
+      clearActiveSectorMission();
+      setActiveScreen('campaign');
+    };
+    const title = !won ? 'Not this time' : activeSectorMission ? 'Mission complete!' : 'Victory!';
+    const detail = !won
+      ? `+${MATCH_XP.loss} XP for trying. Every battle starts with a fresh squad, so give it another go.`
+      : activeSectorMission
+      ? `${activeSectorMission.sectorName} is liberated. +${MATCH_XP.win} XP.`
+      : `You won your first battle. +${MATCH_XP.win} XP.`;
+    return (
+      <div role="dialog" aria-modal="true" aria-labelledby="result-title" data-testid="simple-result" className="flex flex-col items-center gap-4 text-center">
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+          <Flame className="w-12 h-12 text-amber-400 mx-auto" aria-hidden="true" />
+        </div>
+        <h3 id="result-title" className="text-3xl font-black text-stone-100">{title}</h3>
+        <p className="text-sm text-stone-200 max-w-md">{detail}</p>
+        {won && !next && activeSectorMission && <p className="text-sm text-emerald-300 font-semibold">You have liberated Primoris Isle. More islands are coming.</p>}
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {won && next ? (
+            <button autoFocus data-testid="result-next" onClick={() => startSectorMission(next)} className={primary}>
+              {activeSectorMission ? 'Next mission' : 'Start your first mission'}
+            </button>
+          ) : (
+            <button autoFocus data-testid="result-retry" onClick={initSoloMatch} className={primary}>
+              {won ? 'Play again' : 'Try again'}
+            </button>
+          )}
+          <button data-testid="result-missions" onClick={goMissions} className={secondary}>Missions</button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 space-y-4">
       {/* Top Banner & Match Control */}
@@ -917,7 +1005,26 @@ export const TacticalArenaView: React.FC = () => {
         </div>
       )}
 
-      {!introDismissed && !currentRoom && !party && !versus && soloTurn === 1 && !isMatchOver && (
+      {!guideDone && !guideStarted && !currentRoom && !party && !versus && !activeSectorMission && soloTurn === 1 && !isMatchOver && (
+        <div data-testid="welcome-card" className="p-4 rounded-xl border border-amber-700/50 bg-amber-950/30 text-sm text-amber-50 space-y-3">
+          <h2 className="text-lg font-bold">Welcome to Primordial Tactics</h2>
+          <p className="leading-relaxed">Lead your squad and defeat the rival squad. It takes about three minutes, and I will point out each step.</p>
+          <div className="flex flex-wrap gap-2">
+            <button data-testid="welcome-start" autoFocus onClick={() => setGuideStarted(true)} className="min-h-11 px-5 rounded-lg font-bold text-sm bg-amber-600 hover:bg-amber-500 text-white cursor-pointer">Start the battle</button>
+            <button data-testid="welcome-skip" onClick={finishGuide} className="min-h-11 px-4 rounded-lg text-sm font-semibold text-amber-100 border border-amber-700/60 hover:bg-amber-900/40 cursor-pointer">Skip tips</button>
+          </div>
+        </div>
+      )}
+
+      {guideStep && (
+        <div data-testid="guide-coach" role="status" aria-live="polite" className="p-3 rounded-xl border border-emerald-700/60 bg-emerald-950/40 text-sm text-emerald-50 flex items-center gap-3">
+          <span className="text-xs font-bold uppercase tracking-wide text-emerald-300 shrink-0">Step {['move', 'attack', 'end'].indexOf(guideStep) + 1} of 3</span>
+          <p className="flex-1 leading-relaxed">{GUIDE_TEXT[guideStep]}</p>
+          <button data-testid="guide-skip" onClick={finishGuide} className="min-h-11 px-3 rounded-lg text-xs font-semibold text-emerald-200 hover:bg-emerald-900/50 cursor-pointer">Skip tips</button>
+        </div>
+      )}
+
+      {FLAGS.hud && !introDismissed && !currentRoom && !party && !versus && soloTurn === 1 && !isMatchOver && (
         <div
           data-testid="intro-strip"
           className="p-3 rounded-xl border border-sky-800/60 bg-sky-950/40 text-xs text-sky-100 flex items-start gap-3"
@@ -1362,6 +1469,8 @@ export const TacticalArenaView: React.FC = () => {
                     }}
                     onQuit={quitVersus}
                   />
+                ) : !FLAGS.hud ? (
+                  simpleResult()
                 ) : (
                 <>
                 <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">

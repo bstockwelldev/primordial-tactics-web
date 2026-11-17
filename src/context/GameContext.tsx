@@ -18,7 +18,7 @@ import {
 } from '../game/constants';
 import { canAfford, deductResources, applyEvolution } from '../game/rules';
 import { apiUrl } from '../lib/api';
-import { NEW_GAME_XP, levelForXp } from '../game/balance';
+import { NEW_GAME_XP, MATCH_XP, levelForXp } from '../game/balance';
 import * as asyncApi from '../lib/asyncApi';
 import { FLAGS } from '../config/flags';
 import type { GameSummary } from '../lib/asyncApi';
@@ -601,7 +601,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (paid.includes(pvpGameId)) return;
       localStorage.setItem('pt_rewarded_games', JSON.stringify([...paid, pvpGameId].slice(-200)));
     }
-    setPlayerXp((xp) => xp + (won ? 300 : 100));
+    setPlayerXp((xp) => xp + (won ? MATCH_XP.win : MATCH_XP.loss));
     addResources({
       amber: won ? 50 : 20,
       primalMeat: won ? 15 : 5,
