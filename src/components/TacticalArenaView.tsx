@@ -332,6 +332,8 @@ export const TacticalArenaView: React.FC = () => {
   const toneOf = (unit: UnitEntity) => (party && isHumanColour(unit) && controllerOf(unit) === 1 ? 'sky' : 'emerald');
   const firstUnitOf = (units: UnitEntity[], phase: PartyPhase) => units.find((u) => canControl(u, phase))?.id ?? null;
   const modesMenuOn = FLAGS.localModes || FLAGS.online;
+  const missions = missionList(campaignSectors, FLAGS.fullCampaign);
+  const missionNumber = Math.max(1, missions.findIndex((m) => m.id === activeSectorMission?.id) + 1);
   const canOfferBuddy = !currentRoom && !party && !isMatchOver && soloIsPlayerTurn && soloTurn === 1 && soloLogs.length <= 1;
   // Versus is its own plain-arena mode: offered from a fresh skirmish, never from a campaign sector.
   const canOfferVersus = canOfferBuddy && !activeSectorMission;
@@ -1121,6 +1123,7 @@ export const TacticalArenaView: React.FC = () => {
               <Compass className="w-5 h-5" />
             </div>
             <div>
+              {FLAGS.hud ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono uppercase text-cyan-400 font-semibold">
                   Island Campaign Operation
@@ -1132,19 +1135,26 @@ export const TacticalArenaView: React.FC = () => {
                 <span className="text-stone-400 text-xs">·</span>
                 <span className="text-xs font-mono text-stone-400">{activeSectorMission.islandName}</span>
               </div>
+              ) : (
+              <span className="text-xs font-semibold text-cyan-300">
+                Mission {missionNumber} of {missions.length}
+              </span>
+              )}
               <h3 className="font-bold text-stone-100 text-base">
-                Sector: {activeSectorMission.sectorName}
+                {FLAGS.hud ? 'Sector: ' : ''}{activeSectorMission.sectorName}
               </h3>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
+            {FLAGS.hud && (
             <div className="text-right">
               <span className="text-xs uppercase font-mono text-stone-400 block">Liberation Bounty</span>
               <span className="text-xs font-mono font-bold text-cyan-300">
                 +{activeSectorMission.rewards.magitekCores} Cores · +{activeSectorMission.rewards.amber} Amber
               </span>
             </div>
+            )}
             <button
               onClick={() => {
                 clearActiveSectorMission();
@@ -1152,7 +1162,7 @@ export const TacticalArenaView: React.FC = () => {
               }}
               className="px-3 py-1.5 rounded-lg border border-stone-700 bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-mono transition-all cursor-pointer"
             >
-              Island Map
+              {FLAGS.hud ? 'Island Map' : 'Missions'}
             </button>
           </div>
         </div>
