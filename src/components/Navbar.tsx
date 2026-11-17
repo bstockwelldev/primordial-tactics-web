@@ -72,7 +72,7 @@ export const Navbar: React.FC = () => {
               <h1 className="font-extrabold tracking-wider text-base sm:text-lg bg-gradient-to-r from-amber-400 via-orange-300 to-amber-200 bg-clip-text text-transparent">
                 PRIMORDIAL TACTICS
               </h1>
-              <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              <span className="text-xs uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                 Magitek Liberation
               </span>
             </div>
@@ -164,7 +164,7 @@ export const Navbar: React.FC = () => {
             <Users className="w-3.5 h-3.5" />
             <span>My Games</span>
             {yourTurnCount > 0 && (
-              <span data-testid="your-turn-badge" className="ml-0.5 min-w-5 h-5 px-1 rounded-full bg-white text-orange-700 text-[11px] font-black flex items-center justify-center">
+              <span data-testid="your-turn-badge" className="ml-0.5 min-w-5 h-5 px-1 rounded-full bg-white text-orange-700 text-xs font-black flex items-center justify-center">
                 {yourTurnCount}
               </span>
             )}
