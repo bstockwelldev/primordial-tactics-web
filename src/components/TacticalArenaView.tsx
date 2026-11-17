@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import { useGame } from '../context/GameContext';
+import { FLAGS } from '../config/flags';
 import {
   UnitEntity,
   GridTile,
@@ -304,6 +305,7 @@ export const TacticalArenaView: React.FC = () => {
   const isHumanColour = (unit: UnitEntity) => !!versus || unit.isPlayer;
   const toneOf = (unit: UnitEntity) => (party && isHumanColour(unit) && controllerOf(unit) === 1 ? 'sky' : 'emerald');
   const firstUnitOf = (units: UnitEntity[], phase: PartyPhase) => units.find((u) => canControl(u, phase))?.id ?? null;
+  const modesMenuOn = FLAGS.localModes || FLAGS.online;
   const canOfferBuddy = !currentRoom && !party && !isMatchOver && soloIsPlayerTurn && soloTurn === 1 && soloLogs.length <= 1;
   // Versus is its own plain-arena mode: offered from a fresh skirmish, never from a campaign sector.
   const canOfferVersus = canOfferBuddy && !activeSectorMission;
@@ -774,7 +776,7 @@ export const TacticalArenaView: React.FC = () => {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          {!currentRoom && !versus ? (
+          {!currentRoom && !versus ? !modesMenuOn ? null : (
             <div className="relative">
               <button
                 data-testid="more-modes"
@@ -794,7 +796,7 @@ export const TacticalArenaView: React.FC = () => {
                     role="menu"
                     className="absolute left-0 sm:left-auto sm:right-0 z-40 mt-2 w-64 rounded-xl border border-stone-700 bg-stone-900 shadow-2xl p-1.5 space-y-1"
                   >
-                    {canOfferBuddy && (
+                    {FLAGS.localModes && canOfferBuddy && (
                       <button
                         role="menuitem"
                         data-testid="play-with-buddy"
@@ -811,7 +813,7 @@ export const TacticalArenaView: React.FC = () => {
                         <span className="block text-[11px] text-stone-400">Two people on this device vs the AI</span>
                       </button>
                     )}
-                    {canOfferVersus && (
+                    {FLAGS.localModes && canOfferVersus && (
                       <button
                         role="menuitem"
                         data-testid="play-versus"
@@ -833,6 +835,7 @@ export const TacticalArenaView: React.FC = () => {
                         <span className="block text-[11px] text-stone-400">Two people on this device, best of two</span>
                       </button>
                     )}
+                    {FLAGS.online && (
                     <button
                       role="menuitem"
                       data-testid="online-games"
@@ -848,6 +851,7 @@ export const TacticalArenaView: React.FC = () => {
                       </span>
                       <span className="block text-[11px] text-stone-400">Play a friend or stranger by invite link</span>
                     </button>
+                    )}
                   </div>
                 </>
               )}
@@ -1050,7 +1054,7 @@ export const TacticalArenaView: React.FC = () => {
       {/* Arena Battlefield & Action Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Main Grid Canvas / Board (3 cols wide) */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className={`${FLAGS.arenaPro ? 'lg:col-span-3' : 'lg:col-span-4'} space-y-4`}>
           <div className="bg-stone-950/90 rounded-2xl p-4 sm:p-6 border border-stone-800 shadow-2xl relative overflow-x-auto">
             {/* Field Status Header */}
             <div className="flex items-center justify-between pb-3 text-xs text-stone-400 border-b border-stone-800/80 mb-3">
@@ -1123,6 +1127,13 @@ export const TacticalArenaView: React.FC = () => {
                     : 'Tap a green tile to move, or pick an attack and then tap an enemy.'}
                 </p>
               </div>
+            )}
+
+            {/* Simple mode: the side panels are hidden, so keep one line of feedback for the latest event */}
+            {!FLAGS.arenaPro && activeLogs.length > 0 && (
+              <p role="status" aria-live="polite" className="text-xs text-stone-300 bg-stone-900/70 border border-stone-800 rounded-lg px-3 py-2">
+                {activeLogs[activeLogs.length - 1].text}
+              </p>
             )}
 
             {/* The 8x6 Tactical Grid */}
@@ -1592,6 +1603,7 @@ export const TacticalArenaView: React.FC = () => {
         </div>
 
         {/* Right Column: Tactical Scout Scanner & Combat Feed (1 col wide) */}
+        {FLAGS.arenaPro && (
         <div className="space-y-4">
           {/* Tactical Scout Scanner Panel (Unit & Terrain Inspection) */}
           <div className="bg-stone-900/90 rounded-2xl p-4 border border-stone-800 shadow-xl space-y-3">
@@ -1782,6 +1794,7 @@ export const TacticalArenaView: React.FC = () => {
             </form>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

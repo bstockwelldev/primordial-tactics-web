@@ -20,10 +20,19 @@ import { canAfford, deductResources, applyEvolution } from '../game/rules';
 import { apiUrl } from '../lib/api';
 import { NEW_GAME_XP, levelForXp } from '../game/balance';
 import * as asyncApi from '../lib/asyncApi';
+import { FLAGS } from '../config/flags';
 import type { GameSummary } from '../lib/asyncApi';
 import type { AsyncGame, GameAction } from '../game/engine';
 
 export type ActiveScreen = 'base' | 'taming' | 'evolution' | 'arena' | 'campaign' | 'magitek';
+
+/** Arena and the missions map are always on; the rest sit behind a feature flag (src/config/flags.ts). */
+export function screenVisible(screen: ActiveScreen): boolean {
+  if (screen === 'base') return FLAGS.base;
+  if (screen === 'taming' || screen === 'evolution') return FLAGS.creatures;
+  if (screen === 'magitek') return FLAGS.magitek;
+  return true;
+}
 
 interface GameContextType {
   playerName: string;
@@ -162,8 +171,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [baseBuildings, setBaseBuildings] = useState<BaseBuilding[]>(BASE_BUILDINGS);
   // First visit (no saved progress yet) opens on the arena, one click from a first battle;
   // returning players land on their base. `pt_player_xp` is written by the sync effect below, after this runs.
-  const [activeScreen, setActiveScreen] = useState<ActiveScreen>(() =>
-    localStorage.getItem('pt_player_xp') === null ? 'arena' : 'base'
+  const [activeScreen, setActiveScreenRaw] = useState<ActiveScreen>(() =>
+    localStorage.getItem('pt_player_xp') === null ? 'arena' : screenVisible('base') ? 'base' : 'campaign'
+  );
+  // One choke point: a hidden screen (flag off) falls back to the missions map, so no button can strand the player.
+  const setActiveScreen = useCallback(
+    (screen: ActiveScreen) => setActiveScreenRaw(screenVisible(screen) ? screen : 'campaign'),
+    []
   );
 
   // Modals state
@@ -244,6 +258,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [openGames]);
 
   useEffect(() => {
+    if (!FLAGS.online) return; // simple mode: solo play never touches the server
     refreshGames();
     const tick = () => document.visibilityState === 'visible' && refreshGames();
     const timer = window.setInterval(tick, 30_000);
@@ -258,13 +273,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Keep the server-side name in step with the local one.
   useEffect(() => {
-    if (!myPlayerId) return;
+    if (!FLAGS.online || !myPlayerId) return;
     const t = window.setTimeout(() => asyncApi.renamePlayer(playerName), 1500);
     return () => window.clearTimeout(t);
   }, [playerName, myPlayerId]);
 
   useEffect(() => {
-    if (pendingInviteId) setShowLobbyModal(true);
+    if (FLAGS.online && pendingInviteId) setShowLobbyModal(true);
   }, [pendingInviteId]);
 
   const clearPendingInvite = () => {

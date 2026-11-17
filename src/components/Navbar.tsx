@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { useGame, ActiveScreen } from '../context/GameContext';
+import { useGame, ActiveScreen, screenVisible } from '../context/GameContext';
+import { FLAGS } from '../config/flags';
 import { BALANCE, xpForLevel } from '../game/balance';
 import {
   Shield,
@@ -47,7 +48,7 @@ export const Navbar: React.FC = () => {
   const levelEnd = playerLevel < BALANCE.maxLevel ? xpForLevel(playerLevel + 1) : null;
   const levelProgress = levelEnd === null ? 1 : Math.min(1, Math.max(0, (playerXp - levelStart) / (levelEnd - levelStart)));
 
-  const navItems: { id: ActiveScreen; label: string; icon: React.ReactNode }[] = [
+  const allNavItems: { id: ActiveScreen; label: string; icon: React.ReactNode }[] = [
     { id: 'base', label: 'Base Enclave', icon: <Home className="w-4 h-4" /> },
     { id: 'campaign', label: 'Island Campaign', icon: <Compass className="w-4 h-4" /> },
     { id: 'magitek', label: 'Magitek Lab', icon: <Cpu className="w-4 h-4" /> },
@@ -55,6 +56,7 @@ export const Navbar: React.FC = () => {
     { id: 'evolution', label: 'Gene Evolution', icon: <Dna className="w-4 h-4" /> },
     { id: 'arena', label: 'Tactical Arena', icon: <Swords className="w-4 h-4" /> },
   ];
+  const navItems = allNavItems.filter((item) => screenVisible(item.id));
 
   return (
     <header className="lg:sticky lg:top-0 z-40 bg-stone-950/90 backdrop-blur-md border-b border-stone-800 text-stone-100 shadow-xl">
@@ -75,15 +77,19 @@ export const Navbar: React.FC = () => {
               </span>
             </div>
             <div className="flex items-center gap-2 text-xs text-stone-400">
-              <span className="flex items-center gap-1">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isConnected ? 'bg-emerald-500 shadow-emerald-500/50 shadow' : 'bg-red-500'
-                  }`}
-                />
-                {isConnected ? 'Online' : 'Offline — solo play only'}
-              </span>
-              <span>•</span>
+              {FLAGS.online && (
+                <>
+                  <span className="flex items-center gap-1">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        isConnected ? 'bg-emerald-500 shadow-emerald-500/50 shadow' : 'bg-red-500'
+                      }`}
+                    />
+                    {isConnected ? 'Online' : 'Offline — solo play only'}
+                  </span>
+                  <span>•</span>
+                </>
+              )}
               <span className="text-stone-300 font-medium">{playerName}</span>
               <span>•</span>
               <span
@@ -101,6 +107,7 @@ export const Navbar: React.FC = () => {
         </div>
 
         {/* Resources Bar */}
+        {FLAGS.hud && (
         <div className="flex flex-wrap items-center gap-1.5 lg:gap-2 order-3 w-full lg:order-none lg:w-auto bg-stone-900/80 px-2 lg:px-3 py-1.5 rounded-xl border border-stone-800/80 text-xs">
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-cyan-950/70 text-cyan-300 border border-cyan-800/60 font-mono shadow-sm">
             <Cpu className="w-3.5 h-3.5 text-cyan-400" />
@@ -132,10 +139,12 @@ export const Navbar: React.FC = () => {
             <span>{resources.primalMeat}</span>
           </div>
         </div>
+        )}
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
           {/* Quick Demo Resources */}
+          {FLAGS.hud && (
           <button
             onClick={quickAddDemoResources}
             title="Add Test Resources (Flint, Fiber, Amber, Meat)"
@@ -144,8 +153,10 @@ export const Navbar: React.FC = () => {
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">Add Supplies</span>
           </button>
+          )}
 
 {/* Multiplayer Lobby */}
+          {FLAGS.online && (
           <button
             onClick={() => setShowLobbyModal(true)}
             className="flex items-center justify-center gap-1.5 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-orange-950/50 transition-all"
@@ -158,8 +169,10 @@ export const Navbar: React.FC = () => {
               </span>
             )}
           </button>
+          )}
 
           {/* Feature Roadmap */}
+          {FLAGS.hud && (
           <button
             onClick={() => setShowRoadmapModal(true)}
             className="flex items-center justify-center gap-1.5 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-600/40 transition-colors"
@@ -167,10 +180,12 @@ export const Navbar: React.FC = () => {
             <Map className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Roadmap</span>
           </button>
+          )}
         </div>
       </div>
 
       {/* Navigation Tabs */}
+      {navItems.length > 1 && (
       <nav ref={navRef} className="max-w-7xl mx-auto px-4 flex gap-1 sm:gap-2 overflow-x-auto py-1 border-t border-stone-800/60 scrollbar-none">
         {navItems.map((item) => {
           const isActive = activeScreen === item.id;
@@ -194,6 +209,7 @@ export const Navbar: React.FC = () => {
           );
         })}
       </nav>
+      )}
     </header>
   );
 };
