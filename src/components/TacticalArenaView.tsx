@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import confetti from 'canvas-confetti';
 import { useGame } from '../context/GameContext';
 import { FLAGS } from '../config/flags';
-import { GUIDE_TEXT, nextGuideStep, type GuideProgress } from '../game/guide';
+import { GUIDE_START, GUIDE_TEXT, advanceGuide, nextGuideStep, type GuideState } from '../game/guide';
 import { missionList, nextMission } from '../game/missions';
 import { MATCH_XP } from '../game/balance';
 import {
@@ -162,7 +162,7 @@ export const TacticalArenaView: React.FC = () => {
     }
   });
   const [guideStarted, setGuideStarted] = useState(false);
-  const [guideProgress, setGuideProgress] = useState<GuideProgress>({ moved: false, attacked: false, ended: false });
+  const [guideProgress, setGuideProgress] = useState<GuideState>(GUIDE_START);
   const guideBaseline = useRef<{ pos: Record<string, string>; enemyHp: number } | null>(null);
   const finishGuide = () => {
     setGuideDone(true);
@@ -187,7 +187,7 @@ export const TacticalArenaView: React.FC = () => {
     setSoloTurn(1);
     setSoloIsPlayerTurn(true);
     guideBaseline.current = null;
-    setGuideProgress({ moved: false, attacked: false, ended: false });
+    setGuideProgress(GUIDE_START);
     setParty(null);
     setVersus(null);
     setShowVersusDraft(false);
@@ -366,8 +366,7 @@ export const TacticalArenaView: React.FC = () => {
     const base = guideBaseline.current;
     const moved = friends.some((u) => base.pos[u.id] !== undefined && base.pos[u.id] !== `${u.x},${u.y}`);
     const attacked = enemyHp < base.enemyHp;
-    const ended = soloTurn > 1;
-    setGuideProgress((p) => (p.moved && p.attacked && p.ended ? p : { moved: p.moved || moved, attacked: p.attacked || attacked, ended: p.ended || ended }));
+    setGuideProgress((p) => (p.moved && p.attacked && p.ended ? p : advanceGuide(p, { moved, attacked, turn: soloTurn })));
   }, [guideActive, activeUnits, soloTurn]);
   const guideStep = guideActive ? nextGuideStep(guideProgress) : null;
   useEffect(() => {
