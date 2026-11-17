@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useModalA11y } from '../lib/modalFocus';
 import { Users, X, ArrowLeftRight, RotateCcw } from 'lucide-react';
 import type { UnitEntity } from '../types/game';
 import { Slot, assignSlots, defaultAssignments, swapAssignments, validateSplit } from '../game/party';
@@ -25,13 +26,15 @@ export const PartySetupModal: React.FC<Props> = ({ hostName, buildUnits, portrai
   const base = useMemo(() => buildUnits(guestName).filter((u) => u.isPlayer), [buildUnits, guestName]);
   const [assignments, setAssignments] = useState<Record<string, Slot>>(() => defaultAssignments(base));
   const units = useMemo(() => assignSlots(base, assignments), [base, assignments]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalA11y(dialogRef, onCancel);
   const problem = validateSplit(units);
   const names: [string, string] = [hostName, guestName];
 
   const btn = 'min-h-11 px-3 rounded-lg text-xs font-bold border transition-colors cursor-pointer';
 
   return (
-    <div role="dialog" aria-label="Party setup" data-testid="party-setup" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Party setup" data-testid="party-setup" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
       <div className="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
         <div className="p-4 bg-stone-950/90 border-b border-stone-800 flex items-center justify-between">
           <div className="flex items-center gap-3">

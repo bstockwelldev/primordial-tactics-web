@@ -1,14 +1,17 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { useModalA11y } from '../lib/modalFocus';
 import { useGame } from '../context/GameContext';
 import { ROADMAP_PHASES } from '../game/roadmap';
 import { Map, X, CheckCircle2, Clock, Sparkles, Trophy, Shield, Rocket } from 'lucide-react';
 
 export const RoadmapModal: React.FC = () => {
   const { showRoadmapModal, setShowRoadmapModal } = useGame();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalA11y(dialogRef, () => setShowRoadmapModal(false), showRoadmapModal);
   if (!showRoadmapModal) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Feature roadmap" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
       <div className="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="p-5 bg-stone-950/90 border-b border-stone-800 flex items-center justify-between">
