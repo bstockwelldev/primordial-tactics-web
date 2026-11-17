@@ -72,9 +72,11 @@ export const Navbar: React.FC = () => {
               <h1 className="font-extrabold tracking-wider text-base sm:text-lg bg-gradient-to-r from-amber-400 via-orange-300 to-amber-200 bg-clip-text text-transparent">
                 PRIMORDIAL TACTICS
               </h1>
+              {FLAGS.hud && (
               <span className="text-xs uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                 Magitek Liberation
               </span>
+              )}
             </div>
             <div className="flex items-center gap-2 text-xs text-stone-400">
               {FLAGS.online && (

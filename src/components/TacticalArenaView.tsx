@@ -203,8 +203,12 @@ export const TacticalArenaView: React.FC = () => {
         actorName: 'Arena Arbiter',
         actionName: 'Battle Started',
         text: activeSectorMission
-          ? `Island Campaign Strike: Deploying to liberate [${activeSectorMission.sectorName}]!`
-          : `The gladiatorial arena gates open! Tap or hover a unit to see its stats.`,
+          ? FLAGS.hud
+            ? `Island Campaign Strike: Deploying to liberate [${activeSectorMission.sectorName}]!`
+            : `Mission start: free ${activeSectorMission.sectorName}!`
+          : FLAGS.hud
+          ? `The gladiatorial arena gates open! Tap or hover a unit to see its stats.`
+          : `The battle begins! Tap a unit to see its stats.`,
         timestamp: new Date().toLocaleTimeString(),
       },
     ]);
@@ -842,11 +846,13 @@ export const TacticalArenaView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-extrabold text-stone-100 text-lg">
-                {currentRoom ? currentRoom.name : 'Tactical Proving Grounds'}
+                {currentRoom ? currentRoom.name : FLAGS.hud ? 'Tactical Proving Grounds' : activeSectorMission ? 'Mission battle' : 'Practice battle'}
               </h2>
+              {(FLAGS.hud || currentRoom || versus || party) && (
               <span className="text-xs px-2 py-0.5 rounded font-bold uppercase bg-stone-800 text-amber-300 border border-stone-700">
                 {currentRoom ? 'Async PvP' : versus ? `Versus · Game ${versus.game} of 2` : party ? 'Co-op vs AI' : 'Solo AI Skirmish'}
               </span>
+              )}
             </div>
             <div className="flex items-center gap-3 text-xs text-stone-400 mt-0.5">
               <span>Turn: {currentTurnNumber}</span>
