@@ -829,7 +829,7 @@ export const TacticalArenaView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 space-y-4">
+    <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 max-lg:pb-24 space-y-4">
       {/* Top Banner & Match Control */}
       <div className="bg-stone-900/90 rounded-2xl p-4 border border-stone-800 shadow-xl flex flex-wrap items-center justify-between gap-4">
         {/* Match Info */}
@@ -987,7 +987,7 @@ export const TacticalArenaView: React.FC = () => {
           <button
             onClick={handleEndTurn}
             disabled={!isMyTurn || isMatchOver}
-            className={`min-h-11 lg:min-h-0 px-4 py-2 rounded-xl text-xs font-bold shadow-lg transition-all max-lg:fixed max-lg:bottom-4 max-lg:right-4 max-lg:z-30 max-lg:px-6 max-lg:text-sm max-lg:shadow-2xl ${
+            className={`min-h-11 lg:min-h-0 px-4 py-2 rounded-xl text-xs font-bold shadow-lg transition-all max-lg:fixed max-lg:bottom-4 max-lg:right-4 max-lg:z-30 max-lg:px-6 max-lg:text-sm max-lg:shadow-2xl ${isMatchOver ? 'max-lg:hidden' : ''} ${
               isMyTurn && !isMatchOver
                 ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer shadow-emerald-950/50 hover:scale-105'
                 : 'bg-stone-800 text-stone-400 cursor-not-allowed border border-stone-700'
