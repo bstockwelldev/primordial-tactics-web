@@ -177,9 +177,11 @@ export const Navbar: React.FC = () => {
           {FLAGS.hud && (
           <button
             onClick={() => setShowRoadmapModal(true)}
+            aria-label="Roadmap"
+            title="Roadmap"
             className="flex items-center justify-center gap-1.5 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-600/40 transition-colors"
           >
-            <Map className="w-3.5 h-3.5" />
+            <Map className="w-3.5 h-3.5" aria-hidden="true" />
             <span className="hidden md:inline">Roadmap</span>
           </button>
           )}
