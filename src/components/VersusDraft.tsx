@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useModalA11y } from '../lib/modalFocus';
 import { Swords, X, Hand, Check } from 'lucide-react';
 import type { UnitEntity } from '../types/game';
 import { SQUAD_SIZE, VERSUS_TEMPLATE_IDS, VersusTemplateId, previewTemplate, validatePicks } from '../game/versus';
@@ -33,6 +34,8 @@ export const VersusDraft: React.FC<Props> = ({ hostName, portrait, onStart, onCa
   const names: [string, string] = [hostName, guestName];
   const cards = useMemo(() => VERSUS_TEMPLATE_IDS.map((id) => ({ id, unit: previewTemplate(id) })), []);
   const primary = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalA11y(dialogRef, onCancel);
   useEffect(() => {
     if (step === 'pass') primary.current?.focus();
   }, [step]);
@@ -54,7 +57,7 @@ export const VersusDraft: React.FC<Props> = ({ hostName, portrait, onStart, onCa
 
   const btn = 'min-h-11 px-4 rounded-lg text-sm font-bold border transition-colors cursor-pointer';
   const shell = (title: string, subtitle: string, body: React.ReactNode, footer: React.ReactNode) => (
-    <div role="dialog" aria-label="Versus draft" data-testid="versus-draft" data-step={step} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Versus draft" data-testid="versus-draft" data-step={step} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm">
       <div className="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
         <div className="p-4 bg-stone-950/90 border-b border-stone-800 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -112,7 +115,7 @@ export const VersusDraft: React.FC<Props> = ({ hostName, portrait, onStart, onCa
 
   if (step === 'pass') {
     return (
-      <div role="dialog" aria-modal="true" aria-label={`Pass the device to ${guestName}`} data-testid="versus-pass" className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-stone-950 text-center">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`Pass the device to ${guestName}`} data-testid="versus-pass" className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-stone-950 text-center">
         <div className="w-full max-w-sm space-y-5">
           <div className="mx-auto w-16 h-16 rounded-2xl border border-sky-500/50 bg-sky-500/10 flex items-center justify-center">
             <Hand className="w-8 h-8 text-sky-300" />

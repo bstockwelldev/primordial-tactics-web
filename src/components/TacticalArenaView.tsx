@@ -875,6 +875,7 @@ export const TacticalArenaView: React.FC = () => {
             <div className="relative">
               <button
                 data-testid="more-modes"
+                data-modal-return
                 aria-haspopup="menu"
                 aria-expanded={showModesMenu}
                 onClick={() => setShowModesMenu((open) => !open)}

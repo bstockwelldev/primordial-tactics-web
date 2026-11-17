@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useModalA11y } from '../lib/modalFocus';
 import { useGame } from '../context/GameContext';
 import { describeFailure, getGame, renamePlayer, timeAgo, timeLeft, GameSummary } from '../lib/asyncApi';
 import { enablePush, getPushState, PushState } from '../lib/push';
@@ -104,6 +105,8 @@ export const MyGamesModal: React.FC = () => {
     });
   }, [showLobbyModal, pendingInviteId, myPlayerId]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalA11y(dialogRef, () => setShowLobbyModal(false), showLobbyModal);
   if (!showLobbyModal) return null;
 
   const run = async (fn: () => Promise<string | null>) => {
@@ -214,7 +217,7 @@ export const MyGamesModal: React.FC = () => {
   const quietBtn = 'min-h-11 px-3 rounded-lg text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 cursor-pointer';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="My Games" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
       <div className="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
         <div className="p-4 sm:p-5 bg-stone-950/90 border-b border-stone-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
