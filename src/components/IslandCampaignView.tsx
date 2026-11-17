@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { FLAGS } from '../config/flags';
+import { SimpleMissionsView } from './SimpleMissionsView';
 import { useGame } from '../context/GameContext';
 import { IslandSector } from '../types/game';
 import { CLASS_TACTICAL_DETAILS } from '../game/constants';
@@ -52,7 +54,7 @@ const ISLAND_TABS: Array<{
   },
 ];
 
-export const IslandCampaignView: React.FC = () => {
+const FullCampaignView: React.FC = () => {
   const { campaignSectors, startSectorMission, resources } = useGame();
   const [selectedIsland, setSelectedIsland] = useState<'primoris' | 'caldera' | 'tempest' | 'magitek_core'>('primoris');
   const [selectedSectorId, setSelectedSectorId] = useState<string>('sector_primoris_2');
@@ -319,3 +321,5 @@ export const IslandCampaignView: React.FC = () => {
     </div>
   );
 };
+
+export const IslandCampaignView: React.FC = () => (FLAGS.fullCampaign ? <FullCampaignView /> : <SimpleMissionsView />);
