@@ -203,8 +203,8 @@ export const TacticalArenaView: React.FC = () => {
         actorName: 'Arena Arbiter',
         actionName: 'Battle Started',
         text: activeSectorMission
-          ? `Island Campaign Strike: Deploying to liberate [${activeSectorMission.sectorName}]! (Match seed ${seed})`
-          : `The gladiatorial arena gates open! Hover over units and tiles to scan tactical information. (Match seed ${seed})`,
+          ? `Island Campaign Strike: Deploying to liberate [${activeSectorMission.sectorName}]!`
+          : `The gladiatorial arena gates open! Tap or hover a unit to see its stats.`,
         timestamp: new Date().toLocaleTimeString(),
       },
     ]);
@@ -376,7 +376,7 @@ export const TacticalArenaView: React.FC = () => {
         ? soloWinner === 'player_me'
         : winnerId === myPlayerId;
 
-      if (didWin) {
+      if (didWin && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         confetti({
           particleCount: 160,
           spread: 100,
@@ -829,7 +829,7 @@ export const TacticalArenaView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 space-y-4">
+    <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 space-y-4">
       {/* Top Banner & Match Control */}
       <div className="bg-stone-900/90 rounded-2xl p-4 border border-stone-800 shadow-xl flex flex-wrap items-center justify-between gap-4">
         {/* Match Info */}
@@ -842,7 +842,7 @@ export const TacticalArenaView: React.FC = () => {
               <h2 className="font-extrabold text-stone-100 text-lg">
                 {currentRoom ? currentRoom.name : 'Tactical Proving Grounds'}
               </h2>
-              <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-stone-800 text-amber-300 border border-stone-700">
+              <span className="text-xs px-2 py-0.5 rounded font-bold uppercase bg-stone-800 text-amber-300 border border-stone-700">
                 {currentRoom ? 'Async PvP' : versus ? `Versus · Game ${versus.game} of 2` : party ? 'Co-op vs AI' : 'Solo AI Skirmish'}
               </span>
             </div>
@@ -898,7 +898,7 @@ export const TacticalArenaView: React.FC = () => {
                           <Users className="w-3.5 h-3.5" />
                           Play with a buddy
                         </span>
-                        <span className="block text-[11px] text-stone-400">Two people on this device vs the AI</span>
+                        <span className="block text-xs text-stone-400">Two people on this device vs the AI</span>
                       </button>
                     )}
                     {FLAGS.localModes && canOfferVersus && (
@@ -920,7 +920,7 @@ export const TacticalArenaView: React.FC = () => {
                           <Swords className="w-3.5 h-3.5" />
                           Versus
                         </span>
-                        <span className="block text-[11px] text-stone-400">Two people on this device, best of two</span>
+                        <span className="block text-xs text-stone-400">Two people on this device, best of two</span>
                       </button>
                     )}
                     {FLAGS.online && (
@@ -937,7 +937,7 @@ export const TacticalArenaView: React.FC = () => {
                         <Users className="w-3.5 h-3.5" />
                         Online games
                       </span>
-                      <span className="block text-[11px] text-stone-400">Play a friend or stranger by invite link</span>
+                      <span className="block text-xs text-stone-400">Play a friend or stranger by invite link</span>
                     </button>
                     )}
                   </div>
@@ -987,19 +987,19 @@ export const TacticalArenaView: React.FC = () => {
           <button
             onClick={handleEndTurn}
             disabled={!isMyTurn || isMatchOver}
-            className={`min-h-11 lg:min-h-0 px-4 py-2 rounded-xl text-xs font-bold shadow-lg transition-all ${
+            className={`min-h-11 lg:min-h-0 px-4 py-2 rounded-xl text-xs font-bold shadow-lg transition-all max-lg:fixed max-lg:bottom-4 max-lg:right-4 max-lg:z-30 max-lg:px-6 max-lg:text-sm max-lg:shadow-2xl ${
               isMyTurn && !isMatchOver
                 ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer shadow-emerald-950/50 hover:scale-105'
-                : 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
+                : 'bg-stone-800 text-stone-400 cursor-not-allowed border border-stone-700'
             }`}
           >
-            {party && soloPhase !== 'enemy' && !isMatchOver ? `End ${party.names[soloPhase]}'s turn` : 'End Turn & Shift Initiative'}
+            {party && soloPhase !== 'enemy' && !isMatchOver ? `End ${party.names[soloPhase]}'s turn` : 'End Turn'}
           </button>
         </div>
       </div>
 
       {floatingNotification && (
-        <div className="p-3 bg-red-950/90 border border-red-500 text-red-200 text-xs font-semibold rounded-xl flex items-center gap-2 shadow-xl animate-bounce">
+        <div role="alert" className="p-3 bg-red-950/90 border border-red-500 text-red-200 text-xs font-semibold rounded-xl flex items-center gap-2 shadow-xl">
           <AlertTriangle className="w-4 h-4 text-red-400" />
           <span>{floatingNotification}</span>
         </div>
@@ -1122,15 +1122,15 @@ export const TacticalArenaView: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono uppercase text-cyan-400 font-semibold">
+                <span className="text-xs font-mono uppercase text-cyan-400 font-semibold">
                   Island Campaign Operation
                 </span>
-                <span className="text-stone-500 text-xs">·</span>
-                <span className="text-[10px] font-mono text-amber-400">
+                <span className="text-stone-400 text-xs">·</span>
+                <span className="text-xs font-mono text-amber-400">
                   Threat Tier {activeSectorMission.threatLevel}
                 </span>
-                <span className="text-stone-500 text-xs">·</span>
-                <span className="text-[10px] font-mono text-stone-400">{activeSectorMission.islandName}</span>
+                <span className="text-stone-400 text-xs">·</span>
+                <span className="text-xs font-mono text-stone-400">{activeSectorMission.islandName}</span>
               </div>
               <h3 className="font-bold text-stone-100 text-base">
                 Sector: {activeSectorMission.sectorName}
@@ -1140,7 +1140,7 @@ export const TacticalArenaView: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <span className="text-[10px] uppercase font-mono text-stone-400 block">Liberation Bounty</span>
+              <span className="text-xs uppercase font-mono text-stone-400 block">Liberation Bounty</span>
               <span className="text-xs font-mono font-bold text-cyan-300">
                 +{activeSectorMission.rewards.magitekCores} Cores · +{activeSectorMission.rewards.amber} Amber
               </span>
@@ -1162,14 +1162,14 @@ export const TacticalArenaView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Main Grid Canvas / Board (3 cols wide) */}
         <div className={`${FLAGS.arenaPro ? 'lg:col-span-3' : 'lg:col-span-4'} space-y-4`}>
-          <div className="bg-stone-950/90 rounded-2xl p-4 sm:p-6 border border-stone-800 shadow-2xl relative overflow-x-auto">
+          <div className="bg-stone-950/90 rounded-2xl p-2 sm:p-6 border border-stone-800 shadow-2xl relative overflow-x-auto">
             {/* Field Status Header */}
             <div className="flex items-center justify-between pb-3 text-xs text-stone-400 border-b border-stone-800/80 mb-3">
               <div className="flex items-center gap-2">
                 <Compass className="w-4 h-4 text-amber-400" />
-                <span className="font-semibold text-stone-300">Tactical Topography Grid (8x6)</span>
+                <span className="font-semibold text-stone-300">Battlefield</span>
               </div>
-              <div className="flex items-center gap-4 text-[11px]">
+              <div className="flex items-center gap-4 text-xs">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm shadow-emerald-500/50" />
                   <span>{versus ? namesBySlot(versus)[0] : 'Ally Units'}</span>
@@ -1205,7 +1205,7 @@ export const TacticalArenaView: React.FC = () => {
                           armed
                             ? 'bg-red-600 border-red-400 text-white ring-2 ring-red-400/50'
                             : disabled
-                            ? 'bg-stone-950/40 border-stone-900 text-stone-600 cursor-not-allowed'
+                            ? 'bg-stone-950/40 border-stone-900 text-stone-400 cursor-not-allowed'
                             : 'bg-stone-800 border-stone-600 text-stone-100 hover:border-red-400 cursor-pointer'
                         }`}
                       >
@@ -1222,7 +1222,7 @@ export const TacticalArenaView: React.FC = () => {
                     </button>
                   )}
                 </div>
-                <p className="text-[11px] text-stone-400">
+                <p className="text-xs text-stone-400">
                   {!isMyTurn
                     ? 'Waiting for the other side to finish their turn.'
                     : armedAbility
@@ -1244,7 +1244,7 @@ export const TacticalArenaView: React.FC = () => {
             )}
 
             {/* The 8x6 Tactical Grid */}
-            <div className="w-full max-w-2xl mx-auto grid grid-cols-8 gap-1 sm:gap-2 p-1.5 sm:p-2.5 rounded-xl bg-stone-900/60 border border-stone-800/80 shadow-inner">
+            <div role="group" aria-label="Battlefield, 8 columns by 6 rows" className="w-full max-w-2xl mx-auto grid grid-cols-8 gap-0.5 sm:gap-2 p-0.5 sm:p-2.5 rounded-xl bg-stone-900/60 border border-stone-800/80 shadow-inner">
               {gridTiles.map((tile) => {
                 const unitOnTile = activeUnits.find(
                   (u) => u.x === tile.x && u.y === tile.y && u.hp > 0
@@ -1282,14 +1282,29 @@ export const TacticalArenaView: React.FC = () => {
                   calculateDistance(selectedUnit.x, selectedUnit.y, tile.x, tile.y) <= armedAbility.range;
                 if (armedAbility) isReachable = false; // aiming: hide move highlights
 
+                const terrain = !tile.walkable ? 'rocky crags, blocked' : tile.type === 'water' ? 'water' : tile.type === 'mud' ? 'mud' : tile.defenseBonus ? `cover, ${tile.defenseBonus}% defense` : 'open ground';
+                const tileLabel = [
+                  `Column ${tile.x + 1}, row ${tile.y + 1}`,
+                  terrain,
+                  unitOnTile ? `${unitOnTile.name.split(' (')[0]}, ${isFriendly(unitOnTile) ? 'your side' : 'enemy'}, ${unitOnTile.hp} of ${unitOnTile.maxHp} HP, ${unitOnTile.ap} AP` : '',
+                  isSelected ? 'selected' : '',
+                  isReachable ? 'you can move here' : '',
+                  isTargetable ? 'you can attack this unit' : '',
+                ].filter(Boolean).join(', ');
+
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={`${tile.x}_${tile.y}`}
+                    aria-label={tileLabel}
+                    aria-disabled={!tile.walkable || undefined}
                     data-targetable={isTargetable || undefined}
                     onClick={() => handleTileClick(tile.x, tile.y)}
                     onMouseEnter={() => setHoveredTile(tile)}
                     onMouseLeave={() => setHoveredTile(null)}
-                    className={`aspect-square min-w-0 rounded-lg sm:rounded-xl p-0.5 sm:p-1 relative flex flex-col justify-between items-center transition-all cursor-pointer select-none border group ${
+                    onFocus={() => setHoveredTile(tile)}
+                    onBlur={() => setHoveredTile(null)}
+                    className={`focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-300 aspect-square min-w-0 rounded-lg sm:rounded-xl p-0.5 sm:p-1 relative flex flex-col justify-between items-center transition-all cursor-pointer select-none border group ${
                       !tile.walkable
                         ? 'bg-stone-950/90 border-stone-800/80 cursor-not-allowed opacity-90'
                         : isSelected
@@ -1312,15 +1327,15 @@ export const TacticalArenaView: React.FC = () => {
                     }`}
                   >
                     {/* Top Tile Coordinates & Terrain Tag */}
-                    <div className="w-full hidden sm:flex justify-between items-center text-[9px] text-stone-500 font-mono px-0.5 leading-none">
-                      <span>{tile.x},{tile.y}</span>
+                    <div className="w-full flex justify-between items-center text-[10px] text-stone-400 font-mono px-0.5 leading-none">
+                      <span className="hidden sm:inline">{tile.x},{tile.y}</span>
                       {!tile.walkable && (
-                        <span className="text-stone-500 font-bold uppercase text-[8px]">Crags</span>
+                        <span className="text-stone-400 font-bold uppercase text-[10px]">Crags</span>
                       )}
-                      {tile.type === 'water' && <span className="text-sky-400 font-bold text-[8px]">Water</span>}
-                      {tile.type === 'mud' && <span className="text-amber-500 font-bold text-[8px]">Mud</span>}
+                      {tile.type === 'water' && <span className="text-sky-400 font-bold text-[10px]">Water</span>}
+                      {tile.type === 'mud' && <span className="text-amber-500 font-bold text-[10px]">Mud</span>}
                       {tile.defenseBonus ? (
-                        <span className="text-emerald-400 font-bold text-[8px] bg-emerald-950/80 px-1 py-0.5 rounded border border-emerald-800/60">
+                        <span className="text-emerald-400 font-bold text-[10px] bg-emerald-950/80 px-1 py-0.5 rounded border border-emerald-800/60">
                           +{tile.defenseBonus}%
                         </span>
                       ) : null}
@@ -1387,11 +1402,11 @@ export const TacticalArenaView: React.FC = () => {
 
                     {/* Bottom Status / AP Badge */}
                     {unitOnTile && (
-                      <div className="text-[9px] font-bold text-amber-300 font-mono leading-none">
-                        {unitOnTile.ap} AP
+                      <div className="text-[10px] font-bold text-amber-300 font-mono leading-none">
+                        {!isFriendly(unitOnTile) && <span className="text-red-300 mr-0.5">Foe</span>}{unitOnTile.ap} AP
                       </div>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -1408,14 +1423,14 @@ export const TacticalArenaView: React.FC = () => {
                       <span className="font-extrabold text-stone-100">
                         {TERRAIN_INFO[hoveredTile.type]?.name || 'Prehistoric Terrain'}
                       </span>
-                      <span className="font-mono text-stone-400 text-[11px]">
+                      <span className="font-mono text-stone-400 text-xs">
                         ({hoveredTile.x}, {hoveredTile.y})
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase bg-stone-800 text-amber-300">
+                      <span className="text-xs px-1.5 py-0.5 rounded font-bold uppercase bg-stone-800 text-amber-300">
                         {TERRAIN_INFO[hoveredTile.type]?.badge}
                       </span>
                     </div>
-                    <p className="text-[11px] text-stone-300 mt-0.5">
+                    <p className="text-xs text-stone-300 mt-0.5">
                       {TERRAIN_INFO[hoveredTile.type]?.effect}
                     </p>
                   </div>
@@ -1439,7 +1454,7 @@ export const TacticalArenaView: React.FC = () => {
                             {isHumanColour(u) ? (party ? ownerName(u) : 'Ally') : 'Rival'}
                           </span>
                         </div>
-                        <div className="text-[10px] text-stone-400 flex gap-2">
+                        <div className="text-xs text-stone-400 flex gap-2">
                           <span className="text-emerald-400 font-semibold">HP {u.hp}/{u.maxHp}</span>
                           <span>•</span>
                           <span className="text-purple-400 font-semibold">Torpor {u.torpor}/{u.maxTorpor}</span>
@@ -1541,7 +1556,7 @@ export const TacticalArenaView: React.FC = () => {
                         const classInfo = CLASS_TACTICAL_DETAILS[selectedUnit.unitClass] || CLASS_TACTICAL_DETAILS.Blade;
                         return (
                           <span
-                            className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${classInfo.color}`}
+                            className={`text-xs font-mono uppercase px-2 py-0.5 rounded border ${classInfo.color}`}
                             title={classInfo.bonus}
                           >
                             {classInfo.name} Class · {classInfo.role}
@@ -1588,9 +1603,9 @@ export const TacticalArenaView: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-stone-400 uppercase tracking-wider flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Select Tactical Ability (Hover for breakdown):</span>
+                    <span>Choose an attack:</span>
                   </span>
-                  <span className="text-[11px] text-stone-400">
+                  <span className="text-xs text-stone-400">
                     Remaining AP: <strong className="text-amber-300">{selectedUnit.ap}</strong>
                   </span>
                 </div>
@@ -1615,7 +1630,7 @@ export const TacticalArenaView: React.FC = () => {
                               ? 'bg-amber-950/80 border-amber-400 ring-2 ring-amber-400/40 text-amber-100'
                               : canAffordAp
                               ? 'bg-stone-950/80 border-stone-800 hover:border-amber-600/60 text-stone-200'
-                              : 'bg-stone-950/40 border-stone-900 text-stone-600 cursor-not-allowed'
+                              : 'bg-stone-950/40 border-stone-900 text-stone-400 cursor-not-allowed'
                           }`}
                         >
                           <div className="flex items-center justify-between">
@@ -1627,16 +1642,16 @@ export const TacticalArenaView: React.FC = () => {
                               {ability.iconName === 'Droplet' && <Droplet className="w-3.5 h-3.5 text-purple-400" />}
                               <span>{ability.name}</span>
                             </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-800 text-amber-300 font-bold border border-stone-700">
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-stone-800 text-amber-300 font-bold border border-stone-700">
                               {ability.apCost} AP
                             </span>
                           </div>
 
-                          <p className="text-[11px] text-stone-400 line-clamp-2 leading-relaxed">
+                          <p className="text-xs text-stone-400 line-clamp-2 leading-relaxed">
                             {ability.description}
                           </p>
 
-                          <div className="flex items-center justify-between text-[10px] text-stone-400 pt-1.5 border-t border-stone-800/80">
+                          <div className="flex items-center justify-between text-xs text-stone-400 pt-1.5 border-t border-stone-800/80">
                             <span>Range: {ability.range} tile{ability.range > 1 ? 's' : ''}</span>
                             {ability.torporDamage ? (
                               <span className="text-purple-400 font-bold">
@@ -1662,10 +1677,10 @@ export const TacticalArenaView: React.FC = () => {
                         {hoveredAbility.name}
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-300 font-bold border border-amber-800 text-[10px]">
+                        <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-300 font-bold border border-amber-800 text-xs">
                           Cost: {hoveredAbility.apCost} AP
                         </span>
-                        <span className="px-2 py-0.5 rounded bg-stone-800 text-stone-300 text-[10px]">
+                        <span className="px-2 py-0.5 rounded bg-stone-800 text-stone-300 text-xs">
                           Range: {hoveredAbility.range} tile(s)
                         </span>
                       </div>
@@ -1673,7 +1688,7 @@ export const TacticalArenaView: React.FC = () => {
                     <p className="text-stone-300 text-xs leading-relaxed">
                       {hoveredAbility.description}
                     </p>
-                    <div className="flex flex-wrap gap-3 pt-1 text-[11px] text-stone-400 border-t border-stone-800/60">
+                    <div className="flex flex-wrap gap-3 pt-1 text-xs text-stone-400 border-t border-stone-800/60">
                       {hoveredAbility.damageMultiplier && (
                         <span>Damage Multiplier: <strong className="text-red-400">{hoveredAbility.damageMultiplier}x</strong></span>
                       )}
@@ -1721,7 +1736,7 @@ export const TacticalArenaView: React.FC = () => {
                 <Eye className="w-4 h-4 text-cyan-400" />
                 <span>Tactical Inspection Scanner</span>
               </h4>
-              <span className="text-[10px] uppercase font-bold text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800/50">
+              <span className="text-xs uppercase font-bold text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800/50">
                 Live Scan
               </span>
             </div>
@@ -1747,7 +1762,7 @@ export const TacticalArenaView: React.FC = () => {
                       {inspectedUnit.name}
                     </h5>
                     <div className="flex items-center gap-1.5 text-xs text-stone-400 mt-0.5">
-                      <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                      <span className={`text-xs font-bold uppercase px-1.5 py-0.5 rounded ${
                         isHumanColour(inspectedUnit) ? (toneOf(inspectedUnit) === 'sky' ? 'bg-sky-950 text-sky-300' : 'bg-emerald-950 text-emerald-300') : 'bg-red-950 text-red-300'
                       }`}>
                         {isHumanColour(inspectedUnit) ? (party ? `${ownerName(inspectedUnit)}'s Squad` : 'Ally Squad') : 'Rival Clan'}
@@ -1759,7 +1774,7 @@ export const TacticalArenaView: React.FC = () => {
 
                 {/* HP Gauge */}
                 <div className="space-y-1 bg-stone-950/70 p-2 rounded-lg border border-stone-800/80">
-                  <div className="flex justify-between text-[11px] font-semibold">
+                  <div className="flex justify-between text-xs font-semibold">
                     <span className="text-emerald-400 flex items-center gap-1">
                       <Heart className="w-3 h-3" /> Vitality HP
                     </span>
@@ -1777,7 +1792,7 @@ export const TacticalArenaView: React.FC = () => {
 
                 {/* Torpor Gauge */}
                 <div className="space-y-1 bg-stone-950/70 p-2 rounded-lg border border-stone-800/80">
-                  <div className="flex justify-between text-[11px] font-semibold">
+                  <div className="flex justify-between text-xs font-semibold">
                     <span className="text-purple-400 flex items-center gap-1">
                       <Activity className="w-3 h-3" /> Torpor (Drowsiness)
                     </span>
@@ -1791,7 +1806,7 @@ export const TacticalArenaView: React.FC = () => {
                       style={{ width: `${(inspectedUnit.torpor / inspectedUnit.maxTorpor) * 100}%` }}
                     />
                   </div>
-                  <span className="text-[10px] text-stone-500 block">
+                  <span className="text-xs text-stone-400 block">
                     {inspectedUnit.torpor >= inspectedUnit.maxTorpor
                       ? '⚠️ Unconscious! Cannot take actions.'
                       : 'Build torpor using Tranq Darts or tail clubs.'}
@@ -1799,21 +1814,21 @@ export const TacticalArenaView: React.FC = () => {
                 </div>
 
                 {/* Stats Matrix */}
-                <div className="grid grid-cols-4 gap-1.5 text-center bg-stone-950/70 p-2 rounded-lg border border-stone-800/80 text-[10px]">
+                <div className="grid grid-cols-4 gap-1.5 text-center bg-stone-950/70 p-2 rounded-lg border border-stone-800/80 text-xs">
                   <div>
-                    <div className="text-stone-500 font-bold uppercase">Attack</div>
+                    <div className="text-stone-400 font-bold uppercase">Attack</div>
                     <div className="font-extrabold text-red-400 text-xs">{inspectedUnit.attack}</div>
                   </div>
                   <div>
-                    <div className="text-stone-500 font-bold uppercase">Defense</div>
+                    <div className="text-stone-400 font-bold uppercase">Defense</div>
                     <div className="font-extrabold text-blue-400 text-xs">{inspectedUnit.defense}</div>
                   </div>
                   <div>
-                    <div className="text-stone-500 font-bold uppercase">Speed</div>
+                    <div className="text-stone-400 font-bold uppercase">Speed</div>
                     <div className="font-extrabold text-amber-400 text-xs">{inspectedUnit.speed} T</div>
                   </div>
                   <div>
-                    <div className="text-stone-500 font-bold uppercase">AP</div>
+                    <div className="text-stone-400 font-bold uppercase">AP</div>
                     <div className="font-extrabold text-emerald-400 text-xs">{inspectedUnit.ap}/{inspectedUnit.maxAp}</div>
                   </div>
                 </div>
@@ -1821,7 +1836,7 @@ export const TacticalArenaView: React.FC = () => {
                 {/* Active Status Effects */}
                 {inspectedUnit.statusEffects.length > 0 && (
                   <div className="space-y-1.5 pt-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                    <span className="text-xs font-bold uppercase tracking-wider text-stone-400">
                       Active Status Effects:
                     </span>
                     <div className="flex flex-wrap gap-1.5">
@@ -1832,26 +1847,26 @@ export const TacticalArenaView: React.FC = () => {
                             key={idx}
                             onMouseEnter={() => setHoveredStatus(status.type)}
                             onMouseLeave={() => setHoveredStatus(null)}
-                            className="px-2 py-1 rounded bg-stone-950 border border-stone-700 text-[10px] text-stone-300 flex items-center gap-1 cursor-pointer"
+                            className="px-2 py-1 rounded bg-stone-950 border border-stone-700 text-xs text-stone-300 flex items-center gap-1 cursor-pointer"
                           >
                             <span className="font-bold capitalize text-amber-300">{status.type}</span>
-                            <span className="text-stone-500">({status.duration}t)</span>
+                            <span className="text-stone-400">({status.duration}t)</span>
                           </div>
                         );
                       })}
                     </div>
 
                     {hoveredStatus && STATUS_EFFECT_DETAILS[hoveredStatus] && (
-                      <div className="p-2 rounded bg-stone-950 border border-stone-700 text-[11px] text-stone-300 space-y-1">
+                      <div className="p-2 rounded bg-stone-950 border border-stone-700 text-xs text-stone-300 space-y-1">
                         <strong className="text-amber-400">{STATUS_EFFECT_DETAILS[hoveredStatus].name}:</strong>
-                        <p className="text-stone-400 text-[10px]">{STATUS_EFFECT_DETAILS[hoveredStatus].description}</p>
+                        <p className="text-stone-400 text-xs">{STATUS_EFFECT_DETAILS[hoveredStatus].description}</p>
                       </div>
                     )}
                   </div>
                 )}
               </div>
             ) : (
-              <div className="py-6 text-center text-stone-500 text-xs space-y-2">
+              <div className="py-6 text-center text-stone-400 text-xs space-y-2">
                 <Compass className="w-8 h-8 mx-auto text-stone-700" />
                 <p>Hover or click any dinosaur or tile on the arena battlefield to scan tactical attributes.</p>
               </div>
@@ -1866,7 +1881,7 @@ export const TacticalArenaView: React.FC = () => {
                   <Swords className="w-4 h-4 text-red-400" />
                   <span>Combat Feed</span>
                 </h4>
-                <span className="text-[11px] text-stone-400">Tactical Log</span>
+                <span className="text-xs text-stone-400">Tactical Log</span>
               </div>
 
               <div className="space-y-2 overflow-y-auto max-h-52 pr-1 text-xs">
@@ -1875,11 +1890,11 @@ export const TacticalArenaView: React.FC = () => {
                     key={log.id}
                     className="p-2 rounded-lg bg-stone-950/60 border border-stone-800/60 text-stone-300 space-y-1"
                   >
-                    <div className="flex items-center justify-between text-[10px] text-stone-500">
+                    <div className="flex items-center justify-between text-xs text-stone-400">
                       <span className="font-bold text-amber-400">{log.actorName}</span>
                       <span>{/^\d{4}-\d\d-\d\dT/.test(log.timestamp) ? new Date(log.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : log.timestamp}</span>
                     </div>
-                    <p className="leading-relaxed text-stone-300 text-[11px]">{log.text}</p>
+                    <p className="leading-relaxed text-stone-300 text-xs">{log.text}</p>
                   </div>
                 ))}
               </div>
