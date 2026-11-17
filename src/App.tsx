@@ -14,6 +14,7 @@ import { IslandCampaignView } from './components/IslandCampaignView';
 import { MagitekLabView } from './components/MagitekLabView';
 import { RoadmapModal } from './components/RoadmapModal';
 import { MyGamesModal } from './components/MyGamesModal';
+import { FLAGS } from './config/flags';
 
 const GameShell: React.FC = () => {
   const { activeScreen } = useGame();
@@ -32,8 +33,8 @@ const GameShell: React.FC = () => {
       </main>
 
       {/* Interactive Modals */}
-      <RoadmapModal />
-      <MyGamesModal />
+      {FLAGS.hud && <RoadmapModal />}
+      {FLAGS.online && <MyGamesModal />}
     </div>
   );
 };
