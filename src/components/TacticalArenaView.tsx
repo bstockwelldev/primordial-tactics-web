@@ -805,7 +805,7 @@ export const TacticalArenaView: React.FC = () => {
     };
     const title = !won ? 'Not this time' : activeSectorMission ? 'Mission complete!' : 'Victory!';
     const detail = !won
-      ? `+${MATCH_XP.loss} XP for trying. Every battle starts with a fresh squad, so give it another go.${activeSectorMission ? ' Tip: end your first turn without moving and let the rivals come to you.' : ''}`
+      ? `+${MATCH_XP.loss} XP for trying. Every battle starts with a fresh squad, so give it another go.${activeSectorMission ? ' Tip: end your first turn without moving, then attack once the rivals are in range.' : ''}`
       : activeSectorMission
       ? `${activeSectorMission.sectorName} is liberated. +${MATCH_XP.win} XP.`
       : `You won your first battle. +${MATCH_XP.win} XP.`;
